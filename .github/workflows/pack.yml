@@ -1,0 +1,254 @@
+name: Pack Extensions
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Get version
+        id: meta
+        run: |
+          VERSION=$(jq -r .version manifest.json)
+          NAME="icloud-album-downloader"
+          echo "version=$VERSION"   >> "$GITHUB_OUTPUT"
+          echo "name=$NAME"         >> "$GITHUB_OUTPUT"
+
+      - name: Create dist directory
+        run: mkdir -p dist
+
+      # ── Chrome ────────────────────────────────────────────────────
+      - name: Stage Chrome files
+        run: |
+          mkdir -p staging/chrome
+          cp manifest.json background.js staging/chrome/
+          cp -r popup icons staging/chrome/
+
+      - name: Pack Chrome zip
+        working-directory: staging/chrome
+        run: |
+          zip -r "../../dist/${{ steps.meta.outputs.name }}-chrome-${{ steps.meta.outputs.version }}.zip" . \
+            -x "*.DS_Store"
+
+      - name: Pack Chrome crx
+        if: env.CRX_PRIVATE_KEY != ''
+        env:
+          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
+        run: |
+          npm install -g crx3
+          echo "$CRX_PRIVATE_KEY" > /tmp/key.pem
+          crx3 staging/chrome \
+            -p /tmp/key.pem \
+            -o "dist/${{ steps.meta.outputs.name }}-chrome-${{ steps.meta.outputs.version }}.crx"
+          rm -f /tmp/key.pem
+
+      # - name: Submit to Chrome Web Store
+      #   if: startsWith(github.ref, 'refs/tags/') && env.CHROME_CLIENT_ID != '' && env.CHROME_CLIENT_SECRET != '' && env.CHROME_REFRESH_TOKEN != ''
+      #   env:
+      #     CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+      #     CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+      #     CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+      #     CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+      #     CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+      #   run: |
+      #     ZIP="dist/${{ steps.meta.outputs.name }}-chrome-${{ steps.meta.outputs.version }}.zip"
+
+      #     # 1. Exchange refresh token for an access token
+      #     echo "Refreshing Chrome Web Store access token..."
+      #     TOKEN_RESP=$(curl -sS -X POST "https://oauth2.googleapis.com/token" \
+      #       -d "client_id=$CHROME_CLIENT_ID" \
+      #       -d "client_secret=$CHROME_CLIENT_SECRET" \
+      #       -d "refresh_token=$CHROME_REFRESH_TOKEN" \
+      #       -d "grant_type=refresh_token")
+      #     ACCESS_TOKEN=$(echo "$TOKEN_RESP" | jq -r '.access_token')
+
+      #     if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
+      #       echo "::error::Failed to obtain Chrome Web Store access token"
+      #       echo "$TOKEN_RESP" | jq .
+      #       exit 1
+      #     fi
+
+      #     # 2. Upload the zip (updates the existing draft)
+      #     echo "Uploading to Chrome Web Store..."
+      #     UPLOAD_RESP=$(curl -sS \
+      #       -H "Authorization: Bearer $ACCESS_TOKEN" \
+      #       -X POST \
+      #       -T "$ZIP" \
+      #       "https://chromewebstore.googleapis.com/upload/v2/publishers/$CHROME_PUBLISHER_ID/items/$CHROME_EXTENSION_ID:upload")
+      #     UPLOAD_STATE=$(echo "$UPLOAD_RESP" | jq -r '.uploadState')
+      #     echo "$UPLOAD_RESP" | jq .
+
+      #     if [ "$UPLOAD_STATE" = "FAILURE" ]; then
+      #       echo "::error::Chrome Web Store upload failed"
+      #       exit 1
+      #     fi
+
+      #     # If upload is still processing, poll until done
+      #     if [ "$UPLOAD_STATE" = "UPLOAD_IN_PROGRESS" ]; then
+      #       echo "Upload in progress, polling..."
+      #       for i in $(seq 1 12); do
+      #         sleep 10
+      #         STATUS_RESP=$(curl -sS \
+      #           -H "Authorization: Bearer $ACCESS_TOKEN" \
+      #           -X GET \
+      #           "https://chromewebstore.googleapis.com/v2/publishers/$CHROME_PUBLISHER_ID/items/$CHROME_EXTENSION_ID:fetchStatus")
+      #         UPLOAD_STATE=$(echo "$STATUS_RESP" | jq -r '.uploadState')
+      #         echo "  poll $i/12 — state: $UPLOAD_STATE"
+      #         if [ "$UPLOAD_STATE" != "UPLOAD_IN_PROGRESS" ]; then
+      #           break
+      #         fi
+      #       done
+      #     fi
+
+      #     if [ "$UPLOAD_STATE" = "FAILURE" ]; then
+      #       echo "::error::Chrome Web Store upload failed after polling"
+      #       exit 1
+      #     fi
+
+      #     # 3. Publish (submits for review)
+      #     echo "Publishing to Chrome Web Store..."
+      #     PUBLISH_RESP=$(curl -sS \
+      #       -H "Authorization: Bearer $ACCESS_TOKEN" \
+      #       -X POST \
+      #       "https://chromewebstore.googleapis.com/v2/publishers/$CHROME_PUBLISHER_ID/items/$CHROME_EXTENSION_ID:publish")
+      #     echo "$PUBLISH_RESP" | jq .
+      #     echo "::notice::Chrome extension submitted to Web Store for review"
+
+      # ── Firefox ───────────────────────────────────────────────────
+      - name: Stage Firefox files
+        run: |
+          mkdir -p staging/firefox
+          cp manifest_firefox.json staging/firefox/manifest.json
+          cp background.js staging/firefox/
+          cp -r popup icons staging/firefox/
+
+      - name: Pack Firefox xpi (unsigned)
+        working-directory: staging/firefox
+        run: |
+          zip -r "../../dist/${{ steps.meta.outputs.name }}-firefox-${{ steps.meta.outputs.version }}.xpi" . \
+            -x "*.DS_Store"
+
+      - name: Sign Firefox xpi (unlisted — self-distribution)
+        if: env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
+        env:
+          AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
+          AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+        run: |
+          npm install -g web-ext
+          web-ext sign \
+            --source-dir staging/firefox \
+            --channel unlisted \
+            --api-key "$AMO_API_KEY" \
+            --api-secret "$AMO_API_SECRET" \
+            --artifacts-dir dist/signed
+          SIGNED=$(ls dist/signed/*.xpi 2>/dev/null | head -1)
+          if [ -n "$SIGNED" ]; then
+            mv "$SIGNED" "dist/${{ steps.meta.outputs.name }}-firefox-${{ steps.meta.outputs.version }}-signed.xpi"
+            echo "::notice::Signed XPI created successfully"
+          else
+            echo "::warning::Signing succeeded but no signed XPI found in output"
+          fi
+          rm -rf dist/signed
+
+      # - name: Submit Firefox xpi to AMO for review (listed)
+      #   if: startsWith(github.ref, 'refs/tags/') && env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
+      #   env:
+      #     AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
+      #     AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+      #   run: |
+      #     GUID=$(jq -r '.browser_specific_settings.gecko.id' staging/firefox/manifest.json)
+      #     XPI="dist/${{ steps.meta.outputs.name }}-firefox-${{ steps.meta.outputs.version }}.xpi"
+
+      #     # Generate a JWT from AMO API credentials (HS256, 5-min expiry)
+      #     generate_jwt() {
+      #       node -e "
+      #         const crypto = require('crypto');
+      #         const header  = Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');
+      #         const now     = Math.floor(Date.now()/1000);
+      #         const payload = Buffer.from(JSON.stringify({
+      #           iss: process.env.AMO_API_KEY,
+      #           jti: crypto.randomUUID(),
+      #           iat: now,
+      #           exp: now + 300
+      #         })).toString('base64url');
+      #         const sig = crypto.createHmac('sha256', process.env.AMO_API_SECRET)
+      #           .update(header+'.'+payload).digest('base64url');
+      #         process.stdout.write(header+'.'+payload+'.'+sig);
+      #       "
+      #     }
+
+      #     # 1. Upload the XPI to AMO (listed channel)
+      #     echo "Uploading to AMO (listed channel)..."
+      #     JWT=$(generate_jwt)
+      #     UPLOAD_RESP=$(curl -sS -X POST "https://addons.mozilla.org/api/v5/addons/upload/" \
+      #       -H "Authorization: Bearer $JWT" \
+      #       -F "upload=@$XPI" \
+      #       -F "channel=listed")
+      #     UUID=$(echo "$UPLOAD_RESP" | jq -r '.uuid')
+
+      #     if [ "$UUID" = "null" ] || [ -z "$UUID" ]; then
+      #       echo "::error::AMO upload failed"
+      #       echo "$UPLOAD_RESP" | jq .
+      #       exit 1
+      #     fi
+      #     echo "Upload UUID: $UUID"
+
+      #     # 2. Poll until AMO finishes validation
+      #     echo "Waiting for AMO validation..."
+      #     for i in $(seq 1 30); do
+      #       sleep 10
+      #       JWT=$(generate_jwt)
+      #       POLL_RESP=$(curl -sS "https://addons.mozilla.org/api/v5/addons/upload/$UUID/" \
+      #         -H "Authorization: Bearer $JWT")
+      #       PROCESSED=$(echo "$POLL_RESP" | jq -r '.processed')
+      #       if [ "$PROCESSED" = "true" ]; then
+      #         VALID=$(echo "$POLL_RESP" | jq -r '.valid')
+      #         if [ "$VALID" != "true" ]; then
+      #           echo "::error::AMO validation failed"
+      #           echo "$POLL_RESP" | jq '.validation'
+      #           exit 1
+      #         fi
+      #         echo "Validation passed"
+      #         break
+      #       fi
+      #       echo "  poll $i/30 — still processing..."
+      #     done
+
+      #     # 3. Create (or update) the add-on version via PUT
+      #     #    PUT creates the add-on if it doesn't exist, or adds a new version if it does.
+      #     echo "Submitting version for review..."
+      #     JWT=$(generate_jwt)
+      #     SUBMIT_RESP=$(curl -sS -X PUT "https://addons.mozilla.org/api/v5/addons/addon/$GUID/" \
+      #       -H "Authorization: Bearer $JWT" \
+      #       -H "Content-Type: application/json" \
+      #       -d "{\"version\": {\"upload\": \"$UUID\"}}")
+      #     echo "$SUBMIT_RESP" | jq .
+      #     echo "::notice::Firefox extension submitted to AMO for review"
+
+      # ── Artifacts & Release ───────────────────────────────────────
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extensions-${{ steps.meta.outputs.version }}
+          path: dist/*
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/*
