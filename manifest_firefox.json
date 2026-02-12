@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "iCloud Album Downloader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Download entire shared iCloud photo albums — see item counts and download everything in one click.",
   "permissions": [
     "downloads",
@@ -22,8 +22,9 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "icloud-album-downloader@extension",
-      "strict_min_version": "109.0",
+      "strict_min_version": "140.0",
       "data_collection_permissions": {
+        "required": false,
         "public": false
       }
     }

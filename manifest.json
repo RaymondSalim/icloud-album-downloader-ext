@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "iCloud Album Downloader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Download entire shared iCloud photo albums — see item counts and download everything in one click.",
   "permissions": [
     "downloads",
