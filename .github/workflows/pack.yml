@@ -15,13 +15,14 @@ permissions:
   contents: write
 
 jobs:
-  pack:
+  build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      name: ${{ steps.meta.outputs.name }}
     env:
       REPORT_ENDPOINT: ${{ secrets.REPORT_ENDPOINT }}
       REPORT_SECRET: ${{ secrets.REPORT_SECRET }}
-      AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
-      AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
       CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
 
     steps:
@@ -36,13 +37,12 @@ jobs:
         run: |
           VERSION=$(jq -r .version manifest.json)
           NAME="icloud-album-downloader"
-          echo "version=$VERSION"   >> "$GITHUB_OUTPUT"
-          echo "name=$NAME"         >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
       - name: Build extensions
         run: ./build.sh --prod --keep-staging
 
-      # ── Chrome ────────────────────────────────────────────────────
       - name: Pack Chrome crx
         if: env.CRX_PRIVATE_KEY != ''
         run: |
@@ -53,91 +53,42 @@ jobs:
             -o "dist/${{ steps.meta.outputs.name }}-chrome-${{ steps.meta.outputs.version }}.crx"
           rm -f /tmp/key.pem
 
-      # - name: Submit to Chrome Web Store
-      #   if: startsWith(github.ref, 'refs/tags/') && env.CHROME_CLIENT_ID != '' && env.CHROME_CLIENT_SECRET != '' && env.CHROME_REFRESH_TOKEN != ''
-      #   env:
-      #     CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
-      #     CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
-      #     CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
-      #     CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
-      #     CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
-      #   run: |
-      #     ZIP="dist/${{ steps.meta.outputs.name }}-chrome-${{ steps.meta.outputs.version }}.zip"
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ steps.meta.outputs.version }}
+          path: |
+            dist/
+            staging/
 
-      #     # 1. Exchange refresh token for an access token
-      #     echo "Refreshing Chrome Web Store access token..."
-      #     TOKEN_RESP=$(curl -sS -X POST "https://oauth2.googleapis.com/token" \
-      #       -d "client_id=$CHROME_CLIENT_ID" \
-      #       -d "client_secret=$CHROME_CLIENT_SECRET" \
-      #       -d "refresh_token=$CHROME_REFRESH_TOKEN" \
-      #       -d "grant_type=refresh_token")
-      #     ACCESS_TOKEN=$(echo "$TOKEN_RESP" | jq -r '.access_token')
+  amo-listed:
+    needs: build
+    runs-on: ubuntu-latest
+    if: >-
+      startsWith(github.ref, 'refs/tags/') &&
+      needs.build.result == 'success' &&
+      (github.event_name == 'push' || inputs.skip_listed_submit != true)
+    env:
+      AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
+      AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
 
-      #     if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
-      #       echo "::error::Failed to obtain Chrome Web Store access token"
-      #       echo "$TOKEN_RESP" | jq .
-      #       exit 1
-      #     fi
+    steps:
+      - uses: actions/checkout@v4
 
-      #     # 2. Upload the zip (updates the existing draft)
-      #     echo "Uploading to Chrome Web Store..."
-      #     UPLOAD_RESP=$(curl -sS \
-      #       -H "Authorization: Bearer $ACCESS_TOKEN" \
-      #       -X POST \
-      #       -T "$ZIP" \
-      #       "https://chromewebstore.googleapis.com/upload/v2/publishers/$CHROME_PUBLISHER_ID/items/$CHROME_EXTENSION_ID:upload")
-      #     UPLOAD_STATE=$(echo "$UPLOAD_RESP" | jq -r '.uploadState')
-      #     echo "$UPLOAD_RESP" | jq .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
-      #     if [ "$UPLOAD_STATE" = "FAILURE" ]; then
-      #       echo "::error::Chrome Web Store upload failed"
-      #       exit 1
-      #     fi
-
-      #     # If upload is still processing, poll until done
-      #     if [ "$UPLOAD_STATE" = "UPLOAD_IN_PROGRESS" ]; then
-      #       echo "Upload in progress, polling..."
-      #       for i in $(seq 1 12); do
-      #         sleep 10
-      #         STATUS_RESP=$(curl -sS \
-      #           -H "Authorization: Bearer $ACCESS_TOKEN" \
-      #           -X GET \
-      #           "https://chromewebstore.googleapis.com/v2/publishers/$CHROME_PUBLISHER_ID/items/$CHROME_EXTENSION_ID:fetchStatus")
-      #         UPLOAD_STATE=$(echo "$STATUS_RESP" | jq -r '.uploadState')
-      #         echo "  poll $i/12 — state: $UPLOAD_STATE"
-      #         if [ "$UPLOAD_STATE" != "UPLOAD_IN_PROGRESS" ]; then
-      #           break
-      #         fi
-      #       done
-      #     fi
-
-      #     if [ "$UPLOAD_STATE" = "FAILURE" ]; then
-      #       echo "::error::Chrome Web Store upload failed after polling"
-      #       exit 1
-      #     fi
-
-      #     # 3. Publish (submits for review)
-      #     echo "Publishing to Chrome Web Store..."
-      #     PUBLISH_RESP=$(curl -sS \
-      #       -H "Authorization: Bearer $ACCESS_TOKEN" \
-      #       -X POST \
-      #       "https://chromewebstore.googleapis.com/v2/publishers/$CHROME_PUBLISHER_ID/items/$CHROME_EXTENSION_ID:publish")
-      #     echo "$PUBLISH_RESP" | jq .
-      #     echo "::notice::Chrome extension submitted to Web Store for review"
-
-      # ── Firefox ───────────────────────────────────────────────────
-      # Listed first (store version, e.g. 1.1.1), then unlisted self-host
-      # with a fourth version segment (e.g. 1.1.1.1) to avoid AMO version conflicts.
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-${{ needs.build.outputs.version }}
 
       - name: Install web-ext
         if: env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
         run: npm install -g web-ext@8
 
       - name: Submit Firefox xpi to AMO for review (listed)
-        if: >-
-          startsWith(github.ref, 'refs/tags/') &&
-          env.AMO_API_KEY != '' && env.AMO_API_SECRET != '' &&
-          (github.event_name == 'push' || inputs.skip_listed_submit != true)
+        if: env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
         run: |
           set -euo pipefail
           echo "Submitting to AMO (listed channel) via web-ext..."
@@ -151,12 +102,35 @@ jobs:
           rm -rf dist/listed
           echo "::notice::Firefox extension submitted to AMO for review (listed)"
 
+  amo-self-sign:
+    needs: build
+    runs-on: ubuntu-latest
+    if: needs.build.result == 'success'
+    env:
+      AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
+      AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-${{ needs.build.outputs.version }}
+
+      - name: Install web-ext
+        if: env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
+        run: npm install -g web-ext@8
+
       - name: Sign Firefox xpi (unlisted — self-distribution)
         if: env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
         run: |
           set -euo pipefail
 
-          SELF_VERSION="${{ steps.meta.outputs.version }}.1"
+          SELF_VERSION="${{ needs.build.outputs.version }}.1"
           rm -rf staging/firefox-self
           cp -r staging/firefox staging/firefox-self
           jq --arg v "$SELF_VERSION" '.version = $v' staging/firefox-self/manifest.json \
@@ -173,24 +147,43 @@ jobs:
 
           SIGNED=$(ls dist/signed/*.xpi 2>/dev/null | head -1)
           if [ -n "$SIGNED" ]; then
-            mv "$SIGNED" "dist/${{ steps.meta.outputs.name }}-firefox-${{ steps.meta.outputs.version }}-self-signed.xpi"
+            mkdir -p release-extra
+            mv "$SIGNED" "release-extra/${{ needs.build.outputs.name }}-firefox-${{ needs.build.outputs.version }}-self-signed.xpi"
             echo "::notice::Self-distribution XPI signed (version $SELF_VERSION)"
           else
             echo "::warning::Signing succeeded but no signed XPI found in output"
             exit 1
           fi
-          rm -rf dist/signed staging/firefox-self
 
-      # ── Artifacts & Release ───────────────────────────────────────
-      - name: Upload artifacts
+      - name: Upload self-signed Firefox xpi
+        if: env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
         uses: actions/upload-artifact@v4
         with:
-          name: extensions-${{ steps.meta.outputs.version }}
-          path: dist/*
+          name: firefox-self-${{ needs.build.outputs.version }}
+          path: release-extra/
+
+  release:
+    needs: [build, amo-self-sign]
+    runs-on: ubuntu-latest
+    if: >-
+      startsWith(github.ref, 'refs/tags/') &&
+      needs.build.result == 'success'
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-${{ needs.build.outputs.version }}
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: firefox-self-${{ needs.build.outputs.version }}
+          path: release-extra
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: dist/*
+          files: |
+            dist/*
+            release-extra/*

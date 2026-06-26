@@ -10,6 +10,11 @@ try {
   // Firefox loads config.js via manifest background.scripts when importScripts is unavailable.
 }
 try {
+  importScripts("lib/reporting-utils.js");
+} catch {
+  // Firefox loads lib/reporting-utils.js via manifest background.scripts
+}
+try {
   importScripts("reporting.js");
 } catch {
   // Firefox loads reporting.js via manifest background.scripts
@@ -317,6 +322,14 @@ async function runDownloadQueue(toDownload, folderPrefix, { filter = "all", albu
   broadcastProgress();
   notifyDownloadComplete(downloadState);
 
+  if (downloadState.total > 0) {
+    reportEvent({
+      event: "download_ok",
+      itemCount: downloadState.completed,
+      failedCount: downloadState.failed,
+    });
+  }
+
   if (reportFailures && downloadState.failed > 0) {
     reportError({
       operation: "download",
@@ -372,7 +385,12 @@ function broadcastProgress() {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === "scan") {
     scanAlbum(msg.url)
-      .then((result) => sendResponse({ ok: true, data: result }))
+      .then((result) => {
+        if (result.totalItems > 0) {
+          reportEvent({ event: "scan_ok", itemCount: result.totalItems });
+        }
+        sendResponse({ ok: true, data: result });
+      })
       .catch((err) => {
         if (!isUserFacingAPIError(err)) {
           reportError({

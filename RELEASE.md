@@ -113,3 +113,10 @@ Do not upload local builds to the stores if you already use GitHub Releases.
 - Detect videos from iCloud stream metadata (`mediaAssetType`), not only file extensions
 - Optional Live Photo companion video downloads (extension options)
 - HEIC and Live Photo notes in README; scan warnings for HEIC/Live Photo albums
+
+### 1.5.0
+
+- Privacy-safe success telemetry (`scan_ok`, `download_ok`) via error reporter worker
+- Error reports send album token prefix only (8 chars) and truncated user-agent
+- Split CI into build, AMO listed, AMO self-sign, and release jobs
+- Additional unit tests for reporting sanitization and retry backoff cap

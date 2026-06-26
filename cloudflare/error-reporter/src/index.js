@@ -20,14 +20,15 @@ function jsonResponse(body, status = 200) {
   });
 }
 
-function buildSlackPayload(report) {
+function buildErrorSlackPayload(report) {
   const lines = [
     `*Operation:* ${report.operation}`,
     `*Version:* ${report.version || "unknown"}`,
     `*Browser:* ${truncate(report.userAgent, 200)}`,
   ];
 
-  if (report.albumUrl) lines.push(`*Album URL:* ${report.albumUrl}`);
+  if (report.tokenPrefix) lines.push(`*Album token:* ${report.tokenPrefix}…`);
+  else if (report.albumUrl) lines.push(`*Album URL:* ${report.albumUrl}`);
   if (report.filter) lines.push(`*Download filter:* ${report.filter}`);
   if (report.failedCount != null) lines.push(`*Failed files:* ${report.failedCount}`);
 
@@ -54,6 +55,35 @@ function buildSlackPayload(report) {
       },
     ],
   };
+}
+
+function buildEventSlackPayload(body) {
+  const lines = [
+    `*Event:* ${body.event}`,
+    `*Version:* ${body.version || "unknown"}`,
+    `*Items:* ${body.itemCount ?? 0}`,
+  ];
+  if (body.failedCount > 0) {
+    lines.push(`*Failed:* ${body.failedCount}`);
+  }
+
+  return {
+    text: `[success] iCloud Album Downloader: ${body.event}`,
+    blocks: [
+      {
+        type: "header",
+        text: { type: "plain_text", text: "[success] iCloud Album Downloader", emoji: true },
+      },
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: lines.join("\n") },
+      },
+    ],
+  };
+}
+
+function isEventPayload(body) {
+  return body.kind === "event" || body.event === "scan_ok" || body.event === "download_ok";
 }
 
 async function isRateLimited(request) {
@@ -110,15 +140,22 @@ export default {
       return jsonResponse({ ok: false, error: "invalid_json" }, 400);
     }
 
-    if (!body.operation || !body.message) {
+    if (isEventPayload(body)) {
+      if (!body.event) {
+        return jsonResponse({ ok: false, error: "missing_event" }, 400);
+      }
+    } else if (!body.operation || !body.message) {
       return jsonResponse({ ok: false, error: "missing_fields" }, 400);
     }
 
     try {
+      const slackPayload = isEventPayload(body)
+        ? buildEventSlackPayload(body)
+        : buildErrorSlackPayload(body);
       const slackRes = await fetch(env.SLACK_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildSlackPayload(body)),
+        body: JSON.stringify(slackPayload),
       });
 
       if (!slackRes.ok) {

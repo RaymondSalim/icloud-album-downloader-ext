@@ -50,19 +50,33 @@ Headers:
 - `Content-Type: application/json`
 - `Authorization: Bearer <REPORT_SECRET>` (if configured)
 
-Body:
+Body (error):
 ```json
 {
+  "kind": "error",
   "operation": "scan",
   "message": "HTTP 403 from ...",
   "stack": "...",
-  "albumUrl": "https://www.icloud.com/sharedalbum/#...",
-  "version": "1.0.2",
+  "tokenPrefix": "B0aGWZGq",
+  "version": "1.5.0",
   "userAgent": "...",
   "filter": "",
   "failedCount": null,
   "details": {}
 }
 ```
+
+Success event (no album URL or token):
+```json
+{
+  "kind": "event",
+  "event": "scan_ok",
+  "version": "1.5.0",
+  "itemCount": 42,
+  "failedCount": 0
+}
+```
+
+Slack messages for events are prefixed with `[success]`.
 
 Rate limit: 20 reports per IP per hour.

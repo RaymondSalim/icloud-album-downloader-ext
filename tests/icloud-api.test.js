@@ -128,4 +128,27 @@ describe("postJSON", () => {
 
     assert.equal(calls, 1);
   });
+
+  test("caps exponential backoff at 30 seconds", async () => {
+    const delays = [];
+    let calls = 0;
+
+    setFetchForTests(async () => {
+      calls++;
+      return mockResponse(503, {});
+    });
+
+    await assert.rejects(
+      () =>
+        ICloud.postJSON("https://example.com/webstream", {}, "webstream", {
+          sleep: async (ms) => {
+            delays.push(ms);
+          },
+          retries: 6,
+        }),
+      (err) => err.status === 503
+    );
+
+    assert.ok(delays.includes(30000));
+  });
 });
