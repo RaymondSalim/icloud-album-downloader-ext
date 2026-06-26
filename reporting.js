@@ -3,17 +3,12 @@
 const REPORT_DEDUP_MS = 60_000;
 const recentReports = new Map();
 
-const { extractTokenPrefix, sanitizeUserAgent } = self.ReportingUtils;
-
 function getReportingConfig() {
   return self.REPORTING_CONFIG || { enabled: false, reportEndpoint: "", reportSecret: "" };
 }
 
 function dedupKey(payload) {
-  if (payload.kind === "event") {
-    return ["event", payload.event, payload.itemCount, payload.failedCount].join("|");
-  }
-  return [payload.operation, payload.message, payload.tokenPrefix || ""].join("|");
+  return [payload.operation, payload.message, payload.albumUrl || ""].join("|");
 }
 
 function shouldReport(key) {
@@ -29,8 +24,10 @@ async function postReport(payload) {
   if (!config.enabled) return { sent: false, reason: "disabled" };
   if (!config.reportEndpoint) return { sent: false, reason: "no_endpoint" };
 
-  const key = dedupKey(payload);
-  if (!shouldReport(key)) return { sent: false, reason: "deduplicated" };
+  if (payload.kind === "error") {
+    const key = dedupKey(payload);
+    if (!shouldReport(key)) return { sent: false, reason: "deduplicated" };
+  }
 
   const headers = { "Content-Type": "application/json" };
   if (config.reportSecret) {
@@ -56,30 +53,34 @@ async function postReport(payload) {
   }
 }
 
+async function recordSuccess(metric) {
+  return postReport({
+    kind: "count",
+    metric,
+    version: chrome.runtime.getManifest().version,
+  });
+}
+
+async function recordScanSuccess() {
+  return recordSuccess("scan_ok");
+}
+
+async function recordDownloadSuccess() {
+  return recordSuccess("download_ok");
+}
+
 async function reportError(report) {
   const payload = {
     kind: "error",
     operation: report.operation || "unknown",
     message: report.message || "Unknown error",
     stack: report.stack || "",
-    tokenPrefix: extractTokenPrefix(report.albumUrl || ""),
+    albumUrl: report.albumUrl || "",
     filter: report.filter || "",
     failedCount: report.failedCount,
-    userAgent: sanitizeUserAgent(report.userAgent || navigator.userAgent),
+    userAgent: report.userAgent || navigator.userAgent,
     details: report.details || null,
     version: chrome.runtime.getManifest().version,
-  };
-
-  return postReport(payload);
-}
-
-async function reportEvent(event) {
-  const payload = {
-    kind: "event",
-    event: event.event,
-    version: chrome.runtime.getManifest().version,
-    itemCount: event.itemCount ?? 0,
-    failedCount: event.failedCount ?? 0,
   };
 
   return postReport(payload);

@@ -15,12 +15,18 @@ wrangler secret put SLACK_WEBHOOK_URL
 # Recommended: shared secret the extension sends as Authorization: Bearer <secret>
 wrangler secret put REPORT_SECRET
 
+# Required for daily success/error summaries (KV counters)
+npx wrangler kv namespace create icloud-extension-telemetry
+# Add the returned id to wrangler.toml under [[kv_namespaces]] binding = "icloud_extension_telemetry"
+
 wrangler deploy
 ```
 
 After deploy, wrangler prints your worker URL, e.g. `https://icloud-album-error-reporter.<account>.workers.dev`.
 
 The report endpoint is: `https://<your-worker>/report`
+
+A cron trigger runs daily at **00:05 UTC** and posts one Slack summary for the previous UTC day when any counter is non-zero.
 
 ## Configure the extension
 
@@ -50,14 +56,15 @@ Headers:
 - `Content-Type: application/json`
 - `Authorization: Bearer <REPORT_SECRET>` (if configured)
 
-Body (error):
+Body (error — posts to Slack immediately and increments daily error counter):
+
 ```json
 {
   "kind": "error",
   "operation": "scan",
   "message": "HTTP 403 from ...",
   "stack": "...",
-  "tokenPrefix": "B0aGWZGq",
+  "albumUrl": "https://www.icloud.com/sharedalbum/#B0aGWZGq...",
   "version": "1.5.0",
   "userAgent": "...",
   "filter": "",
@@ -66,17 +73,27 @@ Body (error):
 }
 ```
 
-Success event (no album URL or token):
+Body (success ping — no Slack; worker increments daily counter only):
+
 ```json
 {
-  "kind": "event",
-  "event": "scan_ok",
-  "version": "1.5.0",
-  "itemCount": 42,
-  "failedCount": 0
+  "kind": "count",
+  "metric": "scan_ok",
+  "version": "1.5.0"
 }
 ```
 
-Slack messages for events are prefixed with `[success]`.
+`metric` is `scan_ok` or `download_ok`.
 
-Rate limit: 20 reports per IP per hour.
+Daily Slack summary (posted by cron, not by the extension):
+
+```
+Date (UTC): 2026-06-27
+Scan successes: 12
+Download successes: 8
+Errors: 2
+```
+
+If all counts are zero for a UTC day, no summary is posted.
+
+Error reports are rate limited to 20 per IP per hour. Success pings are not rate limited.

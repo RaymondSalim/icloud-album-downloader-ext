@@ -23,7 +23,7 @@
     "open_in_tab": true
   },
   "background": {
-    "scripts": ["config.js", "lib/reporting-utils.js", "reporting.js", "lib/icloud.js", "lib/settings.js", "background.js"]
+    "scripts": ["config.js", "reporting.js", "lib/icloud.js", "lib/settings.js", "background.js"]
   },
   "browser_specific_settings": {
     "gecko": {

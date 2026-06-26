@@ -25,9 +25,9 @@ The extension communicates **only** with Apple's iCloud servers (`*.icloud.com` 
 1. Retrieve metadata for publicly shared photo albums
 2. Download photo and video files
 
-When error reporting is enabled by the developer, failure details are sent to a Cloudflare Worker endpoint configured in the extension build. The worker forwards the report to Slack. Error reports include only the first 8 characters of the album token (not the full URL), a truncated browser user-agent string, and error metadata. No data is sent to any analytics service.
+When error reporting is enabled by the developer, failure details are sent to a Cloudflare Worker endpoint configured in the extension build. The worker forwards each error report to Slack. Error reports may include the album URL, browser user-agent, and error metadata. No data is sent to any analytics service.
 
-When error reporting is enabled, anonymous success counts may also be sent after a successful scan or download batch (event type, extension version, item counts). Success events do not include album URLs or tokens.
+When error reporting is enabled, the extension also sends lightweight success pings (`scan_ok`, `download_ok`) with no album URL. The worker aggregates these server-side and posts one daily Slack summary per UTC day when any count is non-zero.
 
 ## Local Storage
 

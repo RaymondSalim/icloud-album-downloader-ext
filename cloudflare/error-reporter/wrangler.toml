@@ -5,3 +5,13 @@ compatibility_date = "2024-06-01"
 # Set secrets before deploy:
 #   npx wrangler secret put SLACK_WEBHOOK_URL
 #   npx wrangler secret put REPORT_SECRET
+#
+# KV for daily success/error counters (required for daily Slack summary):
+#   npx wrangler kv namespace create icloud-extension-telemetry
+# Then paste the id below:
+[[kv_namespaces]]
+binding = "icloud_extension_telemetry"
+id = "6dc8c9319db84019bf981a71603801a7"
+
+[triggers]
+crons = ["5 0 * * *"]

@@ -116,7 +116,7 @@ Do not upload local builds to the stores if you already use GitHub Releases.
 
 ### 1.5.0
 
-- Privacy-safe success telemetry (`scan_ok`, `download_ok`) via error reporter worker
-- Error reports send album token prefix only (8 chars) and truncated user-agent
+- Daily aggregate telemetry on Cloudflare Worker (KV counters + UTC cron; skipped when all zero)
+- Extension sends lightweight success pings; per-error Slack reports unchanged
 - Split CI into build, AMO listed, AMO self-sign, and release jobs
-- Additional unit tests for reporting sanitization and retry backoff cap
+- Additional unit test for retry backoff cap
