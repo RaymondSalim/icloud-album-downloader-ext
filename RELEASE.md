@@ -54,7 +54,7 @@ Download the files from the [GitHub Releases](https://github.com/RaymondSalim/ic
 
 - File: `icloud-album-downloader-firefox-<version>-signed.xpi` if CI produced one (requires `AMO_API_KEY` / `AMO_API_SECRET`), otherwise `icloud-album-downloader-firefox-<version>.xpi`
 - Upload at [addons.mozilla.org](https://addons.mozilla.org/developers/)
-- Extension ID: `icloud-album-downloader@extension` (fixed in `manifest_firefox.json`)
+- Extension ID: `icloud-album-downloader-pub@extension` (fixed in `manifest_firefox.json`)
 
 ## Verify the release artifact (optional)
 
