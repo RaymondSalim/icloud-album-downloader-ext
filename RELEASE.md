@@ -113,3 +113,10 @@ Do not upload local builds to the stores if you already use GitHub Releases.
 - Detect videos from iCloud stream metadata (`mediaAssetType`), not only file extensions
 - Optional Live Photo companion video downloads (extension options)
 - HEIC and Live Photo notes in README; scan warnings for HEIC/Live Photo albums
+
+### 1.5.0
+
+- Daily aggregate telemetry on Cloudflare Worker (KV counters + UTC cron; skipped when all zero)
+- Extension sends lightweight success pings; per-error Slack reports unchanged
+- Split CI into build, AMO listed, AMO self-sign, and release jobs
+- Additional unit test for retry backoff cap

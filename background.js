@@ -317,6 +317,10 @@ async function runDownloadQueue(toDownload, folderPrefix, { filter = "all", albu
   broadcastProgress();
   notifyDownloadComplete(downloadState);
 
+  if (downloadState.total > 0) {
+    recordDownloadSuccess();
+  }
+
   if (reportFailures && downloadState.failed > 0) {
     reportError({
       operation: "download",
@@ -372,7 +376,12 @@ function broadcastProgress() {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === "scan") {
     scanAlbum(msg.url)
-      .then((result) => sendResponse({ ok: true, data: result }))
+      .then((result) => {
+        if (result.totalItems > 0) {
+          recordScanSuccess();
+        }
+        sendResponse({ ok: true, data: result });
+      })
       .catch((err) => {
         if (!isUserFacingAPIError(err)) {
           reportError({

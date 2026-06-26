@@ -6,6 +6,14 @@ const CORS_HEADERS = {
 
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_SEC = 3600;
+const KV_TTL_SEC = 60 * 60 * 24 * 4;
+
+const COUNT_METRICS = {
+  scan_ok: "scanOk",
+  download_ok: "downloadOk",
+};
+
+const STAT_FIELDS = ["scanOk", "downloadOk", "errors"];
 
 function truncate(text, max = 2800) {
   if (!text) return "";
@@ -20,7 +28,17 @@ function jsonResponse(body, status = 200) {
   });
 }
 
-function buildSlackPayload(report) {
+function utcDateString(offsetDays = 0) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
+function kvKey(date, field) {
+  return `agg:${date}:${field}`;
+}
+
+function buildErrorSlackPayload(report) {
   const lines = [
     `*Operation:* ${report.operation}`,
     `*Version:* ${report.version || "unknown"}`,
@@ -56,6 +74,91 @@ function buildSlackPayload(report) {
   };
 }
 
+function buildDailyAggregateSlackPayload(stats) {
+  const lines = [
+    `*Date (UTC):* ${stats.date}`,
+    `*Scan successes:* ${stats.scanOk ?? 0}`,
+    `*Download successes:* ${stats.downloadOk ?? 0}`,
+    `*Errors:* ${stats.errors ?? 0}`,
+  ];
+
+  return {
+    text: `iCloud Album Downloader daily summary: ${stats.date}`,
+    blocks: [
+      {
+        type: "header",
+        text: { type: "plain_text", text: "iCloud Album Downloader — Daily Summary", emoji: true },
+      },
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: lines.join("\n") },
+      },
+    ],
+  };
+}
+
+function isCountPayload(body) {
+  return body.kind === "count";
+}
+
+function telemetryKv(env) {
+  return env.icloud_extension_telemetry;
+}
+
+async function incrementStat(env, date, field) {
+  const kv = telemetryKv(env);
+  if (!kv) return;
+
+  const key = kvKey(date, field);
+  const current = parseInt((await kv.get(key)) || "0", 10);
+  await kv.put(key, String(current + 1), { expirationTtl: KV_TTL_SEC });
+}
+
+async function readDayStats(env, date) {
+  const stats = { date, scanOk: 0, downloadOk: 0, errors: 0 };
+  const kv = telemetryKv(env);
+  if (!kv) return stats;
+
+  for (const field of STAT_FIELDS) {
+    const value = await kv.get(kvKey(date, field));
+    stats[field] = parseInt(value || "0", 10);
+  }
+
+  return stats;
+}
+
+async function deleteDayStats(env, date) {
+  const kv = telemetryKv(env);
+  if (!kv) return;
+
+  await Promise.all(
+    STAT_FIELDS.map((field) => kv.delete(kvKey(date, field)))
+  );
+}
+
+async function flushDayStats(env, date) {
+  if (!env.SLACK_WEBHOOK_URL) return;
+
+  const stats = await readDayStats(env, date);
+  const total = stats.scanOk + stats.downloadOk + stats.errors;
+  if (total === 0) {
+    await deleteDayStats(env, date);
+    return;
+  }
+
+  const slackRes = await fetch(env.SLACK_WEBHOOK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buildDailyAggregateSlackPayload(stats)),
+  });
+
+  if (!slackRes.ok) {
+    throw new Error(`slack_failed:${slackRes.status}`);
+  }
+
+  await deleteDayStats(env, date);
+}
+
 async function isRateLimited(request) {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const hour = Math.floor(Date.now() / (RATE_LIMIT_WINDOW_SEC * 1000));
@@ -77,6 +180,77 @@ async function isRateLimited(request) {
   return false;
 }
 
+async function authorize(request, env) {
+  if (!env.REPORT_SECRET) return null;
+
+  const auth = request.headers.get("Authorization") || "";
+  if (auth !== `Bearer ${env.REPORT_SECRET}`) {
+    return jsonResponse({ ok: false, error: "unauthorized" }, 401);
+  }
+
+  return null;
+}
+
+async function handleCount(body, env) {
+  const field = COUNT_METRICS[body.metric];
+  if (!field) {
+    return jsonResponse({ ok: false, error: "invalid_metric" }, 400);
+  }
+
+  await incrementStat(env, utcDateString(), field);
+  return jsonResponse({ ok: true });
+}
+
+async function handleError(body, env) {
+  await incrementStat(env, utcDateString(), "errors");
+
+  const slackRes = await fetch(env.SLACK_WEBHOOK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buildErrorSlackPayload(body)),
+  });
+
+  if (!slackRes.ok) {
+    return jsonResponse({ ok: false, error: "slack_failed", status: slackRes.status }, 502);
+  }
+
+  return jsonResponse({ ok: true });
+}
+
+async function handleReport(request, env) {
+  if (!env.SLACK_WEBHOOK_URL) {
+    return jsonResponse({ ok: false, error: "server_misconfigured" }, 500);
+  }
+
+  const authError = await authorize(request, env);
+  if (authError) return authError;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ ok: false, error: "invalid_json" }, 400);
+  }
+
+  if (isCountPayload(body)) {
+    return handleCount(body, env);
+  }
+
+  if (!body.operation || !body.message) {
+    return jsonResponse({ ok: false, error: "missing_fields" }, 400);
+  }
+
+  if (await isRateLimited(request)) {
+    return jsonResponse({ ok: false, error: "rate_limited" }, 429);
+  }
+
+  try {
+    return await handleError(body, env);
+  } catch (err) {
+    return jsonResponse({ ok: false, error: err.message }, 502);
+  }
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
@@ -88,46 +262,17 @@ export default {
       return jsonResponse({ ok: false, error: "not_found" }, 404);
     }
 
-    if (!env.SLACK_WEBHOOK_URL) {
-      return jsonResponse({ ok: false, error: "server_misconfigured" }, 500);
-    }
+    return handleReport(request, env);
+  },
 
-    if (env.REPORT_SECRET) {
-      const auth = request.headers.get("Authorization") || "";
-      if (auth !== `Bearer ${env.REPORT_SECRET}`) {
-        return jsonResponse({ ok: false, error: "unauthorized" }, 401);
-      }
-    }
+  async scheduled(_event, env) {
+    if (!env.SLACK_WEBHOOK_URL) return;
 
-    if (await isRateLimited(request)) {
-      return jsonResponse({ ok: false, error: "rate_limited" }, 429);
-    }
-
-    let body;
+    const yesterday = utcDateString(-1);
     try {
-      body = await request.json();
-    } catch {
-      return jsonResponse({ ok: false, error: "invalid_json" }, 400);
-    }
-
-    if (!body.operation || !body.message) {
-      return jsonResponse({ ok: false, error: "missing_fields" }, 400);
-    }
-
-    try {
-      const slackRes = await fetch(env.SLACK_WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildSlackPayload(body)),
-      });
-
-      if (!slackRes.ok) {
-        return jsonResponse({ ok: false, error: "slack_failed", status: slackRes.status }, 502);
-      }
-
-      return jsonResponse({ ok: true });
+      await flushDayStats(env, yesterday);
     } catch (err) {
-      return jsonResponse({ ok: false, error: err.message }, 502);
+      console.error("daily aggregate flush failed:", err.message);
     }
   },
 };

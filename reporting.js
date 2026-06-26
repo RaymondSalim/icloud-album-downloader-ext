@@ -19,25 +19,15 @@ function shouldReport(key) {
   return true;
 }
 
-async function reportError(report) {
+async function postReport(payload) {
   const config = getReportingConfig();
   if (!config.enabled) return { sent: false, reason: "disabled" };
   if (!config.reportEndpoint) return { sent: false, reason: "no_endpoint" };
 
-  const payload = {
-    operation: report.operation || "unknown",
-    message: report.message || "Unknown error",
-    stack: report.stack || "",
-    albumUrl: report.albumUrl || "",
-    filter: report.filter || "",
-    failedCount: report.failedCount,
-    userAgent: report.userAgent || navigator.userAgent,
-    details: report.details || null,
-    version: chrome.runtime.getManifest().version,
-  };
-
-  const key = dedupKey(payload);
-  if (!shouldReport(key)) return { sent: false, reason: "deduplicated" };
+  if (payload.kind === "error") {
+    const key = dedupKey(payload);
+    if (!shouldReport(key)) return { sent: false, reason: "deduplicated" };
+  }
 
   const headers = { "Content-Type": "application/json" };
   if (config.reportSecret) {
@@ -61,4 +51,37 @@ async function reportError(report) {
     console.warn("[reporting] Failed to send report:", err.message);
     return { sent: false, reason: err.message };
   }
+}
+
+async function recordSuccess(metric) {
+  return postReport({
+    kind: "count",
+    metric,
+    version: chrome.runtime.getManifest().version,
+  });
+}
+
+async function recordScanSuccess() {
+  return recordSuccess("scan_ok");
+}
+
+async function recordDownloadSuccess() {
+  return recordSuccess("download_ok");
+}
+
+async function reportError(report) {
+  const payload = {
+    kind: "error",
+    operation: report.operation || "unknown",
+    message: report.message || "Unknown error",
+    stack: report.stack || "",
+    albumUrl: report.albumUrl || "",
+    filter: report.filter || "",
+    failedCount: report.failedCount,
+    userAgent: report.userAgent || navigator.userAgent,
+    details: report.details || null,
+    version: chrome.runtime.getManifest().version,
+  };
+
+  return postReport(payload);
 }
