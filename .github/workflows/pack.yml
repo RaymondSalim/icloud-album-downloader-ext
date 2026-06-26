@@ -12,6 +12,12 @@ permissions:
 jobs:
   pack:
     runs-on: ubuntu-latest
+    env:
+      REPORT_ENDPOINT: ${{ secrets.REPORT_ENDPOINT }}
+      REPORT_SECRET: ${{ secrets.REPORT_SECRET }}
+      AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
+      AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+      CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -30,15 +36,10 @@ jobs:
 
       - name: Build extensions
         run: ./build.sh --prod --keep-staging
-        env:
-          REPORT_ENDPOINT: ${{ secrets.REPORT_ENDPOINT }}
-          REPORT_SECRET: ${{ secrets.REPORT_SECRET }}
 
       # ── Chrome ────────────────────────────────────────────────────
       - name: Pack Chrome crx
         if: env.CRX_PRIVATE_KEY != ''
-        env:
-          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
         run: |
           npm install -g crx3
           echo "$CRX_PRIVATE_KEY" > /tmp/key.pem
@@ -124,10 +125,7 @@ jobs:
       # with a -self suffix (e.g. 1.1.0-self) to avoid AMO version conflicts.
 
       - name: Submit Firefox xpi to AMO for review (listed)
-        if: startsWith(github.ref, 'refs/tags/') && secrets.AMO_API_KEY != '' && secrets.AMO_API_SECRET != ''
-        env:
-          AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
-          AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+        if: startsWith(github.ref, 'refs/tags/') && env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
         run: |
           set -euo pipefail
           GUID=$(jq -r '.browser_specific_settings.gecko.id' staging/firefox/manifest.json)
@@ -207,10 +205,7 @@ jobs:
           echo "::notice::Firefox extension submitted to AMO for review (listed)"
 
       - name: Sign Firefox xpi (unlisted — self-distribution)
-        if: secrets.AMO_API_KEY != '' && secrets.AMO_API_SECRET != ''
-        env:
-          AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
-          AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+        if: env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
         run: |
           set -euo pipefail
           npm install -g web-ext
