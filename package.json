@@ -1,0 +1,7 @@
+{
+  "name": "icloud-album-downloader-ext",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/**/*.test.js"
+  }
+}

@@ -345,3 +345,7 @@ input::placeholder {
   color: var(--text-secondary);
   margin-bottom: 10px;
 }
+
+.complete-section .btn-block + .btn-block {
+  margin-top: 8px;
+}

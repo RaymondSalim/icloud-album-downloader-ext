@@ -107,6 +107,7 @@ echo "==> Staging Chrome files..."
 mkdir -p staging/chrome
 stage_manifest manifest.json staging/chrome/manifest.json
 cp background.js staging/chrome/
+cp -r lib staging/chrome/
 stage_config staging/chrome
 cp -r popup icons staging/chrome/
 
@@ -119,6 +120,7 @@ echo "==> Staging Firefox files..."
 mkdir -p staging/firefox
 stage_manifest manifest_firefox.json staging/firefox/manifest.json
 cp background.js staging/firefox/
+cp -r lib staging/firefox/
 stage_config staging/firefox
 cp -r popup icons staging/firefox/
 

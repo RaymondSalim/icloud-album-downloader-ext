@@ -14,128 +14,37 @@ try {
 } catch {
   // Firefox loads reporting.js via manifest background.scripts
 }
+try {
+  importScripts("lib/icloud.js");
+} catch {
+  // Firefox loads lib/icloud.js via manifest background.scripts
+}
 
-const DEFAULT_HOST = "p23-sharedstreams.icloud.com";
+
+const {
+  extractToken,
+  parsePhotos,
+  classifyByExtension,
+  extractFilename,
+  fetchStream,
+  fetchAssetURLs,
+} = self.ICloud;
+
 const MAX_CONCURRENT_DOWNLOADS = 3;
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function extractToken(url) {
-  // URLs look like: https://www.icloud.com/sharedalbum/#B0aGWZGqDGHAhDX
-  const match = url.match(/#(.+)$/);
-  return match ? match[1] : null;
-}
-
-function icloudErrorMessage(status, operation) {
-  if (status === 404) {
-    return "Album not found. Double-check the shared album URL and make sure the album is still publicly shared.";
-  }
-  if (status === 403) {
-    return "Access denied. This album may no longer be publicly shared.";
-  }
-  if (status === 429) {
-    return "iCloud is rate-limiting requests. Wait a minute and try again.";
-  }
-  if (status >= 500) {
-    return "iCloud's servers returned an error. Try again in a few minutes.";
-  }
-  const label = operation === "webasseturls" ? "photo URLs" : "album";
-  return `Could not load ${label} from iCloud (HTTP ${status}). Try again later.`;
-}
 
 function isUserFacingAPIError(err) {
   return err && err.name === "ICloudAPIError" && err.status === 404;
 }
 
-async function postJSON(url, body, operation = "webstream") {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+function broadcastScanProgress(done, total) {
+  chrome.runtime.sendMessage({
+    type: "scan-progress",
+    phase: "resolving",
+    done,
+    total,
+  }).catch(() => {
+    // Popup might be closed
   });
-  // iCloud uses HTTP 330 as a custom "use this host instead" redirect.
-  // The response body still contains valid JSON with the redirect host.
-  // Only reject on truly unexpected status codes.
-  if (!res.ok && res.status !== 330) {
-    const err = new Error(icloudErrorMessage(res.status, operation));
-    err.name = "ICloudAPIError";
-    err.status = res.status;
-    err.url = url;
-    err.operation = operation;
-    throw err;
-  }
-  return res.json();
-}
-
-function buildBaseURL(host, token) {
-  return `https://${host}/${token}/sharedstreams`;
-}
-
-function classifyByExtension(urlPath) {
-  const lower = urlPath.toLowerCase();
-  if (/\.(mov|mp4|m4v|avi|wmv|webm)(\?|$)/.test(lower)) return "video";
-  return "photo";
-}
-
-function extractFilename(urlPath) {
-  // URL path looks like: /B/Ab/.../IMG_1234.JPG?o=...
-  const pathPart = urlPath.split("?")[0];
-  const segments = pathPart.split("/");
-  return segments[segments.length - 1] || "unknown";
-}
-
-// ── Core API ─────────────────────────────────────────────────────────────────
-
-async function fetchStream(token) {
-  let host = DEFAULT_HOST;
-  let baseURL = buildBaseURL(host, token);
-
-  let stream = await postJSON(`${baseURL}/webstream`, { streamCtag: null }, "webstream");
-
-  // Handle host redirect
-  const newHost = stream["X-Apple-MMe-Host"];
-  if (newHost) {
-    host = newHost;
-    baseURL = buildBaseURL(host, token);
-    stream = await postJSON(`${baseURL}/webstream`, { streamCtag: null }, "webstream");
-  }
-
-  return { stream, baseURL };
-}
-
-function parsePhotos(stream) {
-  const photos = stream.photos || [];
-  return photos.map((photo) => {
-    const derivs = photo.derivatives || {};
-    // Find the largest derivative (highest resolution original)
-    let best = null;
-    for (const key of Object.keys(derivs)) {
-      const d = derivs[key];
-      const size = parseInt(d.fileSize, 10) || 0;
-      if (!best || size > best.size) {
-        best = { checksum: d.checksum, size, key };
-      }
-    }
-    return {
-      photoGuid: photo.photoGuid,
-      checksum: best ? best.checksum : null,
-      fileSize: best ? best.size : 0,
-      dateCreated: photo.dateCreated,
-      caption: photo.caption,
-      batchGuid: photo.batchGuid,
-    };
-  });
-}
-
-async function fetchAssetURLs(baseURL, photoGuids) {
-  const data = await postJSON(`${baseURL}/webasseturls`, { photoGuids }, "webasseturls");
-  const items = data.items || {};
-  // items is keyed by checksum → { url_location, url_path }
-  const urlMap = {};
-  for (const [checksum, info] of Object.entries(items)) {
-    urlMap[checksum] = `https://${info.url_location}${info.url_path}`;
-  }
-  return urlMap;
 }
 
 // ── Scan Album ───────────────────────────────────────────────────────────────
@@ -151,9 +60,11 @@ async function scanAlbum(albumURL) {
     return { totalItems: 0, photos: 0, videos: 0, totalSize: 0, items: [] };
   }
 
-  // Fetch asset URLs for all items
+  // Fetch asset URLs for all items (chunked for large albums)
   const guids = parsed.map((p) => p.photoGuid);
-  const urlMap = await fetchAssetURLs(baseURL, guids);
+  const urlMap = await fetchAssetURLs(baseURL, guids, {
+    onProgress: (done, total) => broadcastScanProgress(done, total),
+  });
 
   // Build final item list with classification
   const items = [];
@@ -162,7 +73,7 @@ async function scanAlbum(albumURL) {
   let totalSize = 0;
 
   for (const p of parsed) {
-    const url = urlMap[p.checksum];
+    const url = urlMap.get(p.checksum);
     if (!url) continue; // thumbnail or unresolvable
 
     const filename = extractFilename(url);
@@ -204,7 +115,10 @@ let downloadState = {
   skipped: 0,
   currentItems: [],
   errors: [],
+  failedItems: [],
   albumUrl: "",
+  folderPrefix: "",
+  filter: "all",
 };
 
 function resetDownloadState() {
@@ -216,7 +130,10 @@ function resetDownloadState() {
     skipped: 0,
     currentItems: [],
     errors: [],
+    failedItems: [],
     albumUrl: "",
+    folderPrefix: "",
+    filter: "all",
   };
 }
 
@@ -241,20 +158,15 @@ async function downloadFile(item, folderPrefix) {
   });
 }
 
-async function downloadAll(items, filter, folderPrefix, albumUrl = "") {
-  resetDownloadState();
-  downloadState.albumUrl = albumUrl;
-
-  // Filter items by type
-  let toDownload = items;
-  if (filter === "photos") toDownload = items.filter((i) => i.type === "photo");
-  else if (filter === "videos") toDownload = items.filter((i) => i.type === "video");
-
+async function runDownloadQueue(toDownload, folderPrefix, { filter = "all", albumUrl = "", reportFailures = true } = {}) {
   downloadState.active = true;
   downloadState.total = toDownload.length;
+  downloadState.completed = 0;
+  downloadState.failed = 0;
+  downloadState.errors = [];
+  downloadState.failedItems = [];
   broadcastProgress();
 
-  // Download in batches with concurrency control
   const queue = [...toDownload];
   const inFlight = new Set();
 
@@ -268,19 +180,24 @@ async function downloadAll(items, filter, folderPrefix, albumUrl = "") {
             downloadState.completed++;
           } else {
             downloadState.failed++;
-            downloadState.errors.push({ filename: result.item.filename, error: result.error });
+            downloadState.failedItems.push(result.item);
+            downloadState.errors.push({
+              filename: result.item.filename,
+              error: result.error,
+              item: result.item,
+            });
           }
           broadcastProgress();
         })
         .catch((err) => {
           inFlight.delete(promise);
           downloadState.failed++;
-          downloadState.errors.push({ filename: item.filename, error: err.message });
+          downloadState.failedItems.push(item);
+          downloadState.errors.push({ filename: item.filename, error: err.message, item });
           broadcastProgress();
         });
       inFlight.add(promise);
     }
-    // Wait for at least one to finish
     if (inFlight.size > 0) {
       await Promise.race(inFlight);
     }
@@ -289,11 +206,11 @@ async function downloadAll(items, filter, folderPrefix, albumUrl = "") {
   downloadState.active = false;
   broadcastProgress();
 
-  if (downloadState.failed > 0) {
+  if (reportFailures && downloadState.failed > 0) {
     reportError({
       operation: "download",
       message: `${downloadState.failed} of ${downloadState.total} downloads failed`,
-      albumUrl: downloadState.albumUrl || "",
+      albumUrl: albumUrl || downloadState.albumUrl || "",
       filter,
       failedCount: downloadState.failed,
       details: {
@@ -303,6 +220,30 @@ async function downloadAll(items, filter, folderPrefix, albumUrl = "") {
       },
     });
   }
+}
+
+async function downloadAll(items, filter, folderPrefix, albumUrl = "") {
+  resetDownloadState();
+  downloadState.albumUrl = albumUrl;
+  downloadState.folderPrefix = folderPrefix;
+  downloadState.filter = filter;
+
+  let toDownload = items;
+  if (filter === "photos") toDownload = items.filter((i) => i.type === "photo");
+  else if (filter === "videos") toDownload = items.filter((i) => i.type === "video");
+
+  await runDownloadQueue(toDownload, folderPrefix, { filter, albumUrl });
+}
+
+async function retryFailed() {
+  const items = [...downloadState.failedItems];
+  if (items.length === 0) return;
+
+  await runDownloadQueue(items, downloadState.folderPrefix, {
+    filter: downloadState.filter,
+    albumUrl: downloadState.albumUrl,
+    reportFailures: true,
+  });
 }
 
 function broadcastProgress() {
@@ -381,6 +322,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .then((result) => sendResponse({ ok: true, ...result }))
       .catch((err) => sendResponse({ ok: false, error: err.message }));
     return true;
+  }
+
+  if (msg.type === "retry-failed") {
+    retryFailed().catch((err) => {
+      downloadState.active = false;
+      downloadState.errors.push({ filename: "(global)", error: err.message });
+      broadcastProgress();
+      reportError({
+        operation: "download",
+        message: err.message,
+        stack: err.stack,
+        albumUrl: downloadState.albumUrl || "",
+        filter: downloadState.filter,
+      });
+    });
+    sendResponse({ ok: true, started: true });
+    return false;
   }
 
   if (msg.type === "get-progress") {

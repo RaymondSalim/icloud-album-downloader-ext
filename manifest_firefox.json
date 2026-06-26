@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "iCloud Album Downloader",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Download entire shared iCloud photo albums — see item counts and download everything in one click.",
   "permissions": [
     "downloads",
@@ -17,7 +17,7 @@
     "default_title": "iCloud Album Downloader"
   },
   "background": {
-    "scripts": ["config.js", "reporting.js", "background.js"]
+    "scripts": ["config.js", "reporting.js", "lib/icloud.js", "background.js"]
   },
   "browser_specific_settings": {
     "gecko": {
