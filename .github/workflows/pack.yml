@@ -129,27 +129,19 @@ jobs:
         run: |
           set -euo pipefail
           GUID=$(jq -r '.browser_specific_settings.gecko.id' staging/firefox/manifest.json)
+          GUID_ENCODED=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$GUID")
           XPI="dist/${{ steps.meta.outputs.name }}-firefox-${{ steps.meta.outputs.version }}.xpi"
 
           generate_jwt() {
-            node -e "
-              const crypto = require('crypto');
-              const header  = Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');
-              const now     = Math.floor(Date.now()/1000);
-              const payload = Buffer.from(JSON.stringify({
-                iss: process.env.AMO_API_KEY,
-                jti: crypto.randomUUID(),
-                iat: now,
-                exp: now + 300
-              })).toString('base64url');
-              const sig = crypto.createHmac('sha256', process.env.AMO_API_SECRET)
-                .update(header+'.'+payload).digest('base64url');
-              process.stdout.write(header+'.'+payload+'.'+sig);
-            "
+            node scripts/generate-amo-jwt.js
           }
 
           echo "Uploading to AMO (listed channel)..."
           JWT=$(generate_jwt)
+          if [ -z "$JWT" ]; then
+            echo "::error::Failed to generate AMO JWT"
+            exit 1
+          fi
           UPLOAD_RESP=$(curl -sS -X POST "https://addons.mozilla.org/api/v5/addons/upload/" \
             -H "Authorization: Bearer $JWT" \
             -F "upload=@$XPI" \
@@ -192,7 +184,7 @@ jobs:
 
           echo "Submitting version for review..."
           JWT=$(generate_jwt)
-          SUBMIT_RESP=$(curl -sS -X PUT "https://addons.mozilla.org/api/v5/addons/addon/${GUID}/" \
+          SUBMIT_RESP=$(curl -sS -X PUT "https://addons.mozilla.org/api/v5/addons/addon/${GUID_ENCODED}/" \
             -H "Authorization: Bearer $JWT" \
             -H "Content-Type: application/json" \
             -d "{\"version\": {\"upload\": \"$UUID\"}}")
