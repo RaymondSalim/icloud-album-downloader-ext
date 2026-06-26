@@ -121,86 +121,32 @@ jobs:
       #     echo "::notice::Chrome extension submitted to Web Store for review"
 
       # ── Firefox ───────────────────────────────────────────────────
-      # Listed first (store version, e.g. 1.1.0), then unlisted self-host
-      # with a -self suffix (e.g. 1.1.0-self) to avoid AMO version conflicts.
+      # Listed first (store version, e.g. 1.1.1), then unlisted self-host
+      # with a -self suffix (e.g. 1.1.1-self) to avoid AMO version conflicts.
+
+      - name: Install web-ext
+        if: env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
+        run: npm install -g web-ext@8
 
       - name: Submit Firefox xpi to AMO for review (listed)
         if: startsWith(github.ref, 'refs/tags/') && env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
         run: |
           set -euo pipefail
-          GUID=$(jq -r '.browser_specific_settings.gecko.id' staging/firefox/manifest.json)
-          GUID_ENCODED=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$GUID")
-          XPI="dist/${{ steps.meta.outputs.name }}-firefox-${{ steps.meta.outputs.version }}.xpi"
-
-          generate_jwt() {
-            node scripts/generate-amo-jwt.js
-          }
-
-          echo "Uploading to AMO (listed channel)..."
-          JWT=$(generate_jwt)
-          if [ -z "$JWT" ]; then
-            echo "::error::Failed to generate AMO JWT"
-            exit 1
-          fi
-          UPLOAD_RESP=$(curl -sS -X POST "https://addons.mozilla.org/api/v5/addons/upload/" \
-            -H "Authorization: Bearer $JWT" \
-            -F "upload=@$XPI" \
-            -F "channel=listed")
-          UUID=$(echo "$UPLOAD_RESP" | jq -r '.uuid')
-
-          if [ "$UUID" = "null" ] || [ -z "$UUID" ]; then
-            echo "::error::AMO upload failed"
-            echo "$UPLOAD_RESP" | jq .
-            exit 1
-          fi
-          echo "Upload UUID: $UUID"
-
-          echo "Waiting for AMO validation..."
-          VALIDATED=false
-          for i in $(seq 1 30); do
-            sleep 10
-            JWT=$(generate_jwt)
-            POLL_RESP=$(curl -sS "https://addons.mozilla.org/api/v5/addons/upload/$UUID/" \
-              -H "Authorization: Bearer $JWT")
-            PROCESSED=$(echo "$POLL_RESP" | jq -r '.processed')
-            if [ "$PROCESSED" = "true" ]; then
-              VALID=$(echo "$POLL_RESP" | jq -r '.valid')
-              if [ "$VALID" != "true" ]; then
-                echo "::error::AMO validation failed"
-                echo "$POLL_RESP" | jq '.validation'
-                exit 1
-              fi
-              echo "Validation passed"
-              VALIDATED=true
-              break
-            fi
-            echo "  poll $i/30 — still processing..."
-          done
-
-          if [ "$VALIDATED" != "true" ]; then
-            echo "::error::AMO validation timed out"
-            exit 1
-          fi
-
-          echo "Submitting version for review..."
-          JWT=$(generate_jwt)
-          SUBMIT_RESP=$(curl -sS -X PUT "https://addons.mozilla.org/api/v5/addons/addon/${GUID_ENCODED}/" \
-            -H "Authorization: Bearer $JWT" \
-            -H "Content-Type: application/json" \
-            -d "{\"version\": {\"upload\": \"$UUID\"}}")
-          echo "$SUBMIT_RESP" | jq .
-
-          if echo "$SUBMIT_RESP" | jq -e '.error' >/dev/null 2>&1; then
-            echo "::error::AMO version submission failed"
-            exit 1
-          fi
+          echo "Submitting to AMO (listed channel) via web-ext..."
+          web-ext sign \
+            --source-dir staging/firefox \
+            --channel listed \
+            --api-key "$AMO_API_KEY" \
+            --api-secret "$AMO_API_SECRET" \
+            --amo-metadata amo-metadata.json \
+            --artifacts-dir dist/listed
+          rm -rf dist/listed
           echo "::notice::Firefox extension submitted to AMO for review (listed)"
 
       - name: Sign Firefox xpi (unlisted — self-distribution)
         if: env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
         run: |
           set -euo pipefail
-          npm install -g web-ext
 
           SELF_VERSION="${{ steps.meta.outputs.version }}-self"
           rm -rf staging/firefox-self
