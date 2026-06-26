@@ -89,4 +89,14 @@ describe("buildFilename", () => {
       "IMG_9999.HEIC"
     );
   });
+
+  test("applies date-prefix pattern", () => {
+    assert.equal(
+      ICloud.buildFilename(
+        { filename: "photo.jpg", dateCreated: "2024-03-15T12:00:00Z" },
+        { pattern: "date-prefix" }
+      ),
+      "2024-03-15_photo.jpg"
+    );
+  });
 });

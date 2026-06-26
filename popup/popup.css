@@ -228,6 +228,20 @@ input::placeholder {
 
 /* ── Album Info ───────────────────────────────────────────────────────────── */
 
+.loading-size-hint {
+  margin-top: 6px;
+  color: var(--text-secondary);
+}
+
+.download-destination {
+  margin-bottom: 10px;
+}
+
+.album-warning {
+  color: var(--video-accent);
+  margin-bottom: 10px;
+}
+
 .album-info h2 {
   font-size: 14px;
   font-weight: 600;

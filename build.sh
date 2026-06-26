@@ -109,7 +109,7 @@ stage_manifest manifest.json staging/chrome/manifest.json
 cp background.js staging/chrome/
 cp -r lib staging/chrome/
 stage_config staging/chrome
-cp -r popup icons staging/chrome/
+cp -r popup icons options staging/chrome/
 
 echo "==> Packing Chrome zip..."
 (cd staging/chrome && zip -r "../../dist/${NAME}-chrome-${VERSION}.zip" . -x "*.DS_Store")
@@ -122,7 +122,7 @@ stage_manifest manifest_firefox.json staging/firefox/manifest.json
 cp background.js staging/firefox/
 cp -r lib staging/firefox/
 stage_config staging/firefox
-cp -r popup icons staging/firefox/
+cp -r popup icons options staging/firefox/
 
 echo "==> Packing Firefox xpi..."
 (cd staging/firefox && zip -r "../../dist/${NAME}-firefox-${VERSION}.xpi" . -x "*.DS_Store")
