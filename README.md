@@ -55,6 +55,9 @@ Only **publicly shared** albums are supported — no Apple ID login required.
 manifest.json              Chrome manifest (Manifest V3, service_worker)
 manifest_firefox.json      Firefox manifest (Manifest V3, background scripts)
 background.js              API calls & download manager
+reporting.js               Error reporting client (posts to Cloudflare Worker)
+config.example.js          Reporting config template (copy to config.js)
+cloudflare/error-reporter/ Cloudflare Worker proxy → Slack
 popup/
   popup.html               Extension popup UI
   popup.css                Styles
@@ -62,6 +65,62 @@ popup/
 icons/
   icon.svg                 Extension icon (SVG source)
 ```
+
+## Error reporting (developer)
+
+When users hit real failures (scan errors, download failures), the extension posts a report to a Cloudflare Worker you deploy. The worker forwards it to Slack. Your Slack webhook URL never ships in the extension.
+
+**1. Deploy the worker**
+
+See [`cloudflare/error-reporter/README.md`](cloudflare/error-reporter/README.md). Quick version:
+
+```bash
+cd cloudflare/error-reporter
+wrangler login
+wrangler secret put SLACK_WEBHOOK_URL    # Slack incoming webhook
+wrangler secret put REPORT_SECRET        # shared secret for the extension
+wrangler deploy
+```
+
+**2. Configure the extension**
+
+Copy `config.example.js` to `config.js` and set your worker URL + secret:
+
+```js
+self.REPORTING_CONFIG = {
+  enabled: true,
+  reportEndpoint: "https://icloud-album-error-reporter.<account>.workers.dev/report",
+  reportSecret: "same value as REPORT_SECRET above",
+};
+```
+
+Reload the extension (or build with `REPORT_ENDPOINT` / `REPORT_SECRET` env vars).
+
+**Release builds (GitHub → stores)**
+
+Store uploads use artifacts from GitHub Releases, not local builds. See [`RELEASE.md`](RELEASE.md).
+
+1. Set `REPORT_ENDPOINT` and `REPORT_SECRET` as GitHub Actions secrets.
+2. Bump version in both manifests, commit, then tag: `git tag v1.1.0 && git push origin v1.1.0`
+3. CI builds and attaches `.zip` / `.xpi` to the release.
+4. Download from the release page and upload to Chrome Web Store / AMO.
+
+**3. Test it**
+
+From the extension console (popup or background inspect):
+
+```js
+chrome.runtime.sendMessage({ type: "test-report" }).then(console.log)
+// Firefox: browser.runtime.sendMessage({ type: "test-report" }).then(console.log)
+```
+
+From the terminal:
+
+```bash
+node scripts/send-test-report.js
+```
+
+Reports include: operation type, error message, stack trace, album URL, extension version, browser info, and (for download failures) a sample of failed filenames. Validation mistakes (empty URL, wrong format) are not reported. Duplicate identical errors within 60 seconds are deduplicated. The worker rate-limits to 20 reports per IP per hour.
 
 ## Limitations
 

@@ -8,6 +8,7 @@ const autoDetectHint   = $("#auto-detect-hint");
 
 const errorSection     = $("#error-section");
 const errorText        = $("#error-text");
+const errorReportHint  = $("#error-report-hint");
 
 const loadingSection   = $("#loading-section");
 const albumInfo        = $("#album-info");
@@ -50,13 +51,37 @@ function formatBytes(bytes) {
   return `${val.toFixed(i > 1 ? 1 : 0)} ${units[i]}`;
 }
 
-function showError(msg) {
+function showError(msg, { report = false, context = {} } = {}) {
   errorText.textContent = msg;
   errorSection.style.display = "block";
+  errorReportHint.style.display = "none";
+
+  if (report) {
+    reportErrorToBackground({
+      message: msg,
+      ...context,
+    }).then((result) => {
+      if (result?.sent) errorReportHint.style.display = "block";
+    });
+  }
 }
 
 function hideError() {
   errorSection.style.display = "none";
+  errorReportHint.style.display = "none";
+}
+
+async function reportErrorToBackground(context) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: "report-error",
+      userAgent: navigator.userAgent,
+      ...context,
+    });
+    return response || { sent: false, reason: "no_response" };
+  } catch {
+    return { sent: false, reason: "message_failed" };
+  }
 }
 
 function showSection(section) {
@@ -109,7 +134,13 @@ async function handleScan() {
 
     if (!response.ok) {
       showSection(null);
-      showError(response.error || "Failed to scan album.");
+      showError(response.error || "Failed to scan album.", {
+        report: false,
+        context: {
+          operation: "scan",
+          albumUrl: url,
+        },
+      });
       return;
     }
 
@@ -118,7 +149,14 @@ async function handleScan() {
   } catch (err) {
     btnScan.disabled = false;
     showSection(null);
-    showError(`Scan failed: ${err.message}`);
+    showError(`Scan failed: ${err.message}`, {
+      report: true,
+      context: {
+        operation: "scan",
+        albumUrl: url,
+        stack: err.stack,
+      },
+    });
   }
 }
 
@@ -169,15 +207,31 @@ async function handleDownload(filter) {
       items: scannedData.items,
       filter,
       folder,
+      albumUrl: albumURLInput.value.trim(),
     });
 
     if (!response.ok) {
-      showError(response.error || "Download failed to start.");
+      showError(response.error || "Download failed to start.", {
+        report: true,
+        context: {
+          operation: "download",
+          albumUrl: albumURLInput.value.trim(),
+          filter,
+        },
+      });
       showSection(albumInfo);
     }
     // Completion is handled by the progress listener below
   } catch (err) {
-    showError(`Download error: ${err.message}`);
+    showError(`Download error: ${err.message}`, {
+      report: true,
+      context: {
+        operation: "download",
+        albumUrl: albumURLInput.value.trim(),
+        filter,
+        stack: err.stack,
+      },
+    });
     showSection(albumInfo);
   }
 }

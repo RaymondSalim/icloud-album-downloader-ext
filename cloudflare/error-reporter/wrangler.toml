@@ -1,0 +1,7 @@
+name = "icloud-album-error-reporter"
+main = "src/index.js"
+compatibility_date = "2024-06-01"
+
+# Set secrets before deploy:
+#   npx wrangler secret put SLACK_WEBHOOK_URL
+#   npx wrangler secret put REPORT_SECRET

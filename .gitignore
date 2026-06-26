@@ -1,0 +1,4 @@
+.DS_Store
+dist/
+config.js
+cloudflare/error-reporter/.wrangler/

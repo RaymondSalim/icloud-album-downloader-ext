@@ -1,6 +1,6 @@
 # Privacy Policy — iCloud Album Downloader
 
-**Last updated:** February 12, 2026
+**Last updated:** June 26, 2026
 
 ## Overview
 
@@ -25,7 +25,7 @@ The extension communicates **only** with Apple's iCloud servers (`*.icloud.com` 
 1. Retrieve metadata for publicly shared photo albums
 2. Download photo and video files
 
-No data is sent to any other server, third party, or analytics service.
+When error reporting is enabled by the developer, failure details (error message, album URL, browser version) are sent to a Cloudflare Worker endpoint configured in the extension build. The worker forwards the report to Slack. No data is sent to any analytics service.
 
 ## Local Storage
 

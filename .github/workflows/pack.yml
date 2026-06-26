@@ -28,22 +28,13 @@ jobs:
           echo "version=$VERSION"   >> "$GITHUB_OUTPUT"
           echo "name=$NAME"         >> "$GITHUB_OUTPUT"
 
-      - name: Create dist directory
-        run: mkdir -p dist
+      - name: Build extensions
+        run: ./build.sh --prod --keep-staging
+        env:
+          REPORT_ENDPOINT: ${{ secrets.REPORT_ENDPOINT }}
+          REPORT_SECRET: ${{ secrets.REPORT_SECRET }}
 
       # ── Chrome ────────────────────────────────────────────────────
-      - name: Stage Chrome files
-        run: |
-          mkdir -p staging/chrome
-          cp manifest.json background.js staging/chrome/
-          cp -r popup icons staging/chrome/
-
-      - name: Pack Chrome zip
-        working-directory: staging/chrome
-        run: |
-          zip -r "../../dist/${{ steps.meta.outputs.name }}-chrome-${{ steps.meta.outputs.version }}.zip" . \
-            -x "*.DS_Store"
-
       - name: Pack Chrome crx
         if: env.CRX_PRIVATE_KEY != ''
         env:
@@ -129,19 +120,6 @@ jobs:
       #     echo "::notice::Chrome extension submitted to Web Store for review"
 
       # ── Firefox ───────────────────────────────────────────────────
-      - name: Stage Firefox files
-        run: |
-          mkdir -p staging/firefox
-          cp manifest_firefox.json staging/firefox/manifest.json
-          cp background.js staging/firefox/
-          cp -r popup icons staging/firefox/
-
-      - name: Pack Firefox xpi (unsigned)
-        working-directory: staging/firefox
-        run: |
-          zip -r "../../dist/${{ steps.meta.outputs.name }}-firefox-${{ steps.meta.outputs.version }}.xpi" . \
-            -x "*.DS_Store"
-
       - name: Sign Firefox xpi (unlisted — self-distribution)
         if: env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
         env:
