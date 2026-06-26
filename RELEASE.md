@@ -9,9 +9,11 @@ Bump version in manifests → commit → git tag vX.Y.Z → git push origin vX.Y
                                                               ↓
                                               GitHub Actions (Pack Extensions)
                                                               ↓
+                         Build artifacts + AMO listed submit + self-signed XPI
+                                                              ↓
                                     GitHub Release with .zip + .xpi attached
                                                               ↓
-                              Download artifacts → upload to Chrome / Firefox stores
+                              Upload Chrome .zip manually; Firefox listed is auto-submitted
 ```
 
 CI runs `./build.sh --prod` using repository secrets. Your local `config.js` is never used.
@@ -23,7 +25,7 @@ CI runs `./build.sh --prod` using repository secrets. Your local `config.js` is 
 3. Confirm these GitHub repository secrets are set (Settings → Secrets → Actions):
    - `REPORT_ENDPOINT` — Cloudflare Worker URL (e.g. `https://….workers.dev/report`)
    - `REPORT_SECRET` — shared bearer token for the worker
-   - Optional: `AMO_API_KEY` + `AMO_API_SECRET` — produces a signed Firefox XPI in the release
+   - `AMO_API_KEY` + `AMO_API_SECRET` — AMO listed submit + self-distribution signing
    - Optional: `CRX_PRIVATE_KEY` — produces a `.crx` in the release (Chrome Web Store uses the `.zip`)
 
 4. Commit and push to `main`.
@@ -35,14 +37,16 @@ git tag v1.1.0
 git push origin v1.1.0
 ```
 
-Wait for the **Pack Extensions** workflow to finish. It will:
+Wait for the **Pack Extensions** workflow to finish. On tag pushes it will:
 
 - Build production packages with reporting config injected from secrets
+- Submit `1.1.0` to AMO **listed** for review (if AMO secrets are set)
+- Sign a **self-distribution** XPI as `1.1.0-self` (unlisted, avoids AMO version conflicts)
 - Attach artifacts to a new GitHub Release
 
 ## Upload to the stores
 
-Download the files from the [GitHub Releases](https://github.com/RaymondSalim/icloud-album-downloader-ext/releases) page (not from a local `dist/` folder).
+Download Chrome artifacts from the [GitHub Releases](https://github.com/RaymondSalim/icloud-album-downloader-ext/releases) page.
 
 **Chrome Web Store**
 
@@ -52,13 +56,15 @@ Download the files from the [GitHub Releases](https://github.com/RaymondSalim/ic
 
 **Firefox Add-ons (AMO)**
 
-- File: `icloud-album-downloader-firefox-<version>-signed.xpi` if CI produced one (requires `AMO_API_KEY` / `AMO_API_SECRET`), otherwise `icloud-album-downloader-firefox-<version>.xpi`
-- Upload at [addons.mozilla.org](https://addons.mozilla.org/developers/)
+- **Listed (public store):** submitted automatically by CI on tag push. Check status at [addons.mozilla.org/developers](https://addons.mozilla.org/developers/).
+- **Self-distribution (optional):** `icloud-album-downloader-firefox-<version>-self-signed.xpi` from the GitHub Release. Manifest version inside is `<version>-self` (e.g. `1.1.0-self`).
 - Extension ID: `icloud-album-downloader-pub@extension` (fixed in `manifest_firefox.json`)
+
+AMO does not allow the same version number on listed and unlisted channels. That is why the store build uses `1.1.0` and the self-host build uses `1.1.0-self`.
 
 ## Verify the release artifact (optional)
 
-Download the `.xpi` from the GitHub Release, then:
+Download the listed `.xpi` from the GitHub Release, then:
 
 ```bash
 unzip -p icloud-album-downloader-firefox-1.1.0.xpi config.js

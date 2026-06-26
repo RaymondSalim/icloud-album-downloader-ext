@@ -120,102 +120,125 @@ jobs:
       #     echo "::notice::Chrome extension submitted to Web Store for review"
 
       # ── Firefox ───────────────────────────────────────────────────
-      - name: Sign Firefox xpi (unlisted — self-distribution)
-        if: env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
+      # Listed first (store version, e.g. 1.1.0), then unlisted self-host
+      # with a -self suffix (e.g. 1.1.0-self) to avoid AMO version conflicts.
+
+      - name: Submit Firefox xpi to AMO for review (listed)
+        if: startsWith(github.ref, 'refs/tags/') && secrets.AMO_API_KEY != '' && secrets.AMO_API_SECRET != ''
         env:
           AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
           AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
         run: |
+          set -euo pipefail
+          GUID=$(jq -r '.browser_specific_settings.gecko.id' staging/firefox/manifest.json)
+          XPI="dist/${{ steps.meta.outputs.name }}-firefox-${{ steps.meta.outputs.version }}.xpi"
+
+          generate_jwt() {
+            node -e "
+              const crypto = require('crypto');
+              const header  = Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');
+              const now     = Math.floor(Date.now()/1000);
+              const payload = Buffer.from(JSON.stringify({
+                iss: process.env.AMO_API_KEY,
+                jti: crypto.randomUUID(),
+                iat: now,
+                exp: now + 300
+              })).toString('base64url');
+              const sig = crypto.createHmac('sha256', process.env.AMO_API_SECRET)
+                .update(header+'.'+payload).digest('base64url');
+              process.stdout.write(header+'.'+payload+'.'+sig);
+            "
+          }
+
+          echo "Uploading to AMO (listed channel)..."
+          JWT=$(generate_jwt)
+          UPLOAD_RESP=$(curl -sS -X POST "https://addons.mozilla.org/api/v5/addons/upload/" \
+            -H "Authorization: Bearer $JWT" \
+            -F "upload=@$XPI" \
+            -F "channel=listed")
+          UUID=$(echo "$UPLOAD_RESP" | jq -r '.uuid')
+
+          if [ "$UUID" = "null" ] || [ -z "$UUID" ]; then
+            echo "::error::AMO upload failed"
+            echo "$UPLOAD_RESP" | jq .
+            exit 1
+          fi
+          echo "Upload UUID: $UUID"
+
+          echo "Waiting for AMO validation..."
+          VALIDATED=false
+          for i in $(seq 1 30); do
+            sleep 10
+            JWT=$(generate_jwt)
+            POLL_RESP=$(curl -sS "https://addons.mozilla.org/api/v5/addons/upload/$UUID/" \
+              -H "Authorization: Bearer $JWT")
+            PROCESSED=$(echo "$POLL_RESP" | jq -r '.processed')
+            if [ "$PROCESSED" = "true" ]; then
+              VALID=$(echo "$POLL_RESP" | jq -r '.valid')
+              if [ "$VALID" != "true" ]; then
+                echo "::error::AMO validation failed"
+                echo "$POLL_RESP" | jq '.validation'
+                exit 1
+              fi
+              echo "Validation passed"
+              VALIDATED=true
+              break
+            fi
+            echo "  poll $i/30 — still processing..."
+          done
+
+          if [ "$VALIDATED" != "true" ]; then
+            echo "::error::AMO validation timed out"
+            exit 1
+          fi
+
+          echo "Submitting version for review..."
+          JWT=$(generate_jwt)
+          SUBMIT_RESP=$(curl -sS -X PUT "https://addons.mozilla.org/api/v5/addons/addon/${GUID}/" \
+            -H "Authorization: Bearer $JWT" \
+            -H "Content-Type: application/json" \
+            -d "{\"version\": {\"upload\": \"$UUID\"}}")
+          echo "$SUBMIT_RESP" | jq .
+
+          if echo "$SUBMIT_RESP" | jq -e '.error' >/dev/null 2>&1; then
+            echo "::error::AMO version submission failed"
+            exit 1
+          fi
+          echo "::notice::Firefox extension submitted to AMO for review (listed)"
+
+      - name: Sign Firefox xpi (unlisted — self-distribution)
+        if: secrets.AMO_API_KEY != '' && secrets.AMO_API_SECRET != ''
+        env:
+          AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
+          AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+        run: |
+          set -euo pipefail
           npm install -g web-ext
+
+          SELF_VERSION="${{ steps.meta.outputs.version }}-self"
+          rm -rf staging/firefox-self
+          cp -r staging/firefox staging/firefox-self
+          jq --arg v "$SELF_VERSION" '.version = $v' staging/firefox-self/manifest.json \
+            > staging/firefox-self/manifest.json.tmp
+          mv staging/firefox-self/manifest.json.tmp staging/firefox-self/manifest.json
+
+          echo "Signing unlisted self-distribution build (version $SELF_VERSION)..."
           web-ext sign \
-            --source-dir staging/firefox \
+            --source-dir staging/firefox-self \
             --channel unlisted \
             --api-key "$AMO_API_KEY" \
             --api-secret "$AMO_API_SECRET" \
             --artifacts-dir dist/signed
+
           SIGNED=$(ls dist/signed/*.xpi 2>/dev/null | head -1)
           if [ -n "$SIGNED" ]; then
-            mv "$SIGNED" "dist/${{ steps.meta.outputs.name }}-firefox-${{ steps.meta.outputs.version }}-signed.xpi"
-            echo "::notice::Signed XPI created successfully"
+            mv "$SIGNED" "dist/${{ steps.meta.outputs.name }}-firefox-${{ steps.meta.outputs.version }}-self-signed.xpi"
+            echo "::notice::Self-distribution XPI signed (version $SELF_VERSION)"
           else
             echo "::warning::Signing succeeded but no signed XPI found in output"
+            exit 1
           fi
-          rm -rf dist/signed
-
-      # - name: Submit Firefox xpi to AMO for review (listed)
-      #   if: startsWith(github.ref, 'refs/tags/') && env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
-      #   env:
-      #     AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
-      #     AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
-      #   run: |
-      #     GUID=$(jq -r '.browser_specific_settings.gecko.id' staging/firefox/manifest.json)
-      #     XPI="dist/${{ steps.meta.outputs.name }}-firefox-${{ steps.meta.outputs.version }}.xpi"
-
-      #     # Generate a JWT from AMO API credentials (HS256, 5-min expiry)
-      #     generate_jwt() {
-      #       node -e "
-      #         const crypto = require('crypto');
-      #         const header  = Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');
-      #         const now     = Math.floor(Date.now()/1000);
-      #         const payload = Buffer.from(JSON.stringify({
-      #           iss: process.env.AMO_API_KEY,
-      #           jti: crypto.randomUUID(),
-      #           iat: now,
-      #           exp: now + 300
-      #         })).toString('base64url');
-      #         const sig = crypto.createHmac('sha256', process.env.AMO_API_SECRET)
-      #           .update(header+'.'+payload).digest('base64url');
-      #         process.stdout.write(header+'.'+payload+'.'+sig);
-      #       "
-      #     }
-
-      #     # 1. Upload the XPI to AMO (listed channel)
-      #     echo "Uploading to AMO (listed channel)..."
-      #     JWT=$(generate_jwt)
-      #     UPLOAD_RESP=$(curl -sS -X POST "https://addons.mozilla.org/api/v5/addons/upload/" \
-      #       -H "Authorization: Bearer $JWT" \
-      #       -F "upload=@$XPI" \
-      #       -F "channel=listed")
-      #     UUID=$(echo "$UPLOAD_RESP" | jq -r '.uuid')
-
-      #     if [ "$UUID" = "null" ] || [ -z "$UUID" ]; then
-      #       echo "::error::AMO upload failed"
-      #       echo "$UPLOAD_RESP" | jq .
-      #       exit 1
-      #     fi
-      #     echo "Upload UUID: $UUID"
-
-      #     # 2. Poll until AMO finishes validation
-      #     echo "Waiting for AMO validation..."
-      #     for i in $(seq 1 30); do
-      #       sleep 10
-      #       JWT=$(generate_jwt)
-      #       POLL_RESP=$(curl -sS "https://addons.mozilla.org/api/v5/addons/upload/$UUID/" \
-      #         -H "Authorization: Bearer $JWT")
-      #       PROCESSED=$(echo "$POLL_RESP" | jq -r '.processed')
-      #       if [ "$PROCESSED" = "true" ]; then
-      #         VALID=$(echo "$POLL_RESP" | jq -r '.valid')
-      #         if [ "$VALID" != "true" ]; then
-      #           echo "::error::AMO validation failed"
-      #           echo "$POLL_RESP" | jq '.validation'
-      #           exit 1
-      #         fi
-      #         echo "Validation passed"
-      #         break
-      #       fi
-      #       echo "  poll $i/30 — still processing..."
-      #     done
-
-      #     # 3. Create (or update) the add-on version via PUT
-      #     #    PUT creates the add-on if it doesn't exist, or adds a new version if it does.
-      #     echo "Submitting version for review..."
-      #     JWT=$(generate_jwt)
-      #     SUBMIT_RESP=$(curl -sS -X PUT "https://addons.mozilla.org/api/v5/addons/addon/$GUID/" \
-      #       -H "Authorization: Bearer $JWT" \
-      #       -H "Content-Type: application/json" \
-      #       -d "{\"version\": {\"upload\": \"$UUID\"}}")
-      #     echo "$SUBMIT_RESP" | jq .
-      #     echo "::notice::Firefox extension submitted to AMO for review"
+          rm -rf dist/signed staging/firefox-self
 
       # ── Artifacts & Release ───────────────────────────────────────
       - name: Upload artifacts
