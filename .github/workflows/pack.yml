@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      skip_listed_submit:
+        description: Skip AMO listed submit (use when only rebuilding self-signed XPI)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -122,14 +127,17 @@ jobs:
 
       # ── Firefox ───────────────────────────────────────────────────
       # Listed first (store version, e.g. 1.1.1), then unlisted self-host
-      # with a -self suffix (e.g. 1.1.1-self) to avoid AMO version conflicts.
+      # with a fourth version segment (e.g. 1.1.1.1) to avoid AMO version conflicts.
 
       - name: Install web-ext
         if: env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
         run: npm install -g web-ext@8
 
       - name: Submit Firefox xpi to AMO for review (listed)
-        if: startsWith(github.ref, 'refs/tags/') && env.AMO_API_KEY != '' && env.AMO_API_SECRET != ''
+        if: >-
+          startsWith(github.ref, 'refs/tags/') &&
+          env.AMO_API_KEY != '' && env.AMO_API_SECRET != '' &&
+          (github.event_name == 'push' || inputs.skip_listed_submit != true)
         run: |
           set -euo pipefail
           echo "Submitting to AMO (listed channel) via web-ext..."
@@ -148,7 +156,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          SELF_VERSION="${{ steps.meta.outputs.version }}-self"
+          SELF_VERSION="${{ steps.meta.outputs.version }}.1"
           rm -rf staging/firefox-self
           cp -r staging/firefox staging/firefox-self
           jq --arg v "$SELF_VERSION" '.version = $v' staging/firefox-self/manifest.json \

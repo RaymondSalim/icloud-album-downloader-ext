@@ -102,7 +102,7 @@ Store uploads use artifacts from GitHub Releases. See [`RELEASE.md`](RELEASE.md)
 
 1. Set `REPORT_ENDPOINT`, `REPORT_SECRET`, `AMO_API_KEY`, and `AMO_API_SECRET` as GitHub Actions secrets.
 2. Bump version in both manifests, commit, then tag: `git tag v1.1.0 && git push origin v1.1.0`
-3. CI builds artifacts, auto-submits Firefox **listed** to AMO, and signs a **self** XPI (`<version>-self`).
+3. CI builds artifacts, auto-submits Firefox **listed** to AMO, and signs a **self** XPI (manifest version `<version>.1`, e.g. `1.1.1.1`).
 4. Download the Chrome `.zip` from the release page and upload to Chrome Web Store manually.
 
 **3. Test it**

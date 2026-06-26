@@ -41,8 +41,10 @@ Wait for the **Pack Extensions** workflow to finish. On tag pushes it will:
 
 - Build production packages with reporting config injected from secrets
 - Submit `1.1.0` to AMO **listed** for review (if AMO secrets are set)
-- Sign a **self-distribution** XPI as `1.1.0-self` (unlisted, avoids AMO version conflicts)
+- Sign a **self-distribution** XPI as `<version>.1` (e.g. `1.1.1.1`, unlisted, avoids AMO version conflicts)
 - Attach artifacts to a new GitHub Release
+
+**Re-run without a new tag:** open **Actions → Pack Extensions → Run workflow** on `main`. Listed submit is skipped automatically (not a tag push). Use this to rebuild the Chrome `.zip` or self-signed Firefox XPI after a partial CI failure.
 
 ## Upload to the stores
 
@@ -57,10 +59,10 @@ Download Chrome artifacts from the [GitHub Releases](https://github.com/RaymondS
 **Firefox Add-ons (AMO)**
 
 - **Listed (public store):** submitted automatically by CI on tag push. Check status at [addons.mozilla.org/developers](https://addons.mozilla.org/developers/).
-- **Self-distribution (optional):** `icloud-album-downloader-firefox-<version>-self-signed.xpi` from the GitHub Release. Manifest version inside is `<version>-self` (e.g. `1.1.0-self`).
-- Extension ID: `icloud-album-downloader-pub@extension` (fixed in `manifest_firefox.json`)
+- **Self-distribution (optional):** `icloud-album-downloader-firefox-<version>-self-signed.xpi` from the GitHub Release. Manifest version inside is `<version>.1` (e.g. `1.1.1.1`).
 
-AMO does not allow the same version number on listed and unlisted channels. That is why the store build uses `1.1.0` and the self-host build uses `1.1.0-self`.
+AMO does not allow the same version number on listed and unlisted channels. Firefox also requires numeric-only versions (no `-self` suffix). The store build uses `1.1.1` and the self-host build uses `1.1.1.1`.
+- Extension ID: `icloud-album-downloader-pub@extension` (fixed in `manifest_firefox.json`)
 
 ## Verify the release artifact (optional)
 

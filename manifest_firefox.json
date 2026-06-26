@@ -5,8 +5,7 @@
   "description": "Download entire shared iCloud photo albums — see item counts and download everything in one click.",
   "permissions": [
     "downloads",
-    "activeTab",
-    "storage"
+    "activeTab"
   ],
   "host_permissions": [
     "https://*.icloud.com/*",
