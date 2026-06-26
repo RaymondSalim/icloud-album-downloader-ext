@@ -8,6 +8,9 @@ const ICloud = require("../lib/icloud.js");
 const fixture = JSON.parse(
   readFileSync(join(__dirname, "fixtures/webstream-sample.json"), "utf8")
 );
+const mediaFixture = JSON.parse(
+  readFileSync(join(__dirname, "fixtures/webstream-video-live.json"), "utf8")
+);
 
 describe("extractToken", () => {
   test("parses hash URL", () => {
@@ -50,6 +53,30 @@ describe("parsePhotos", () => {
     const parsed = ICloud.parsePhotos(fixture);
     assert.equal(parsed[2].checksum, null);
     assert.equal(parsed[2].fileSize, 0);
+  });
+});
+
+describe("parsePhotos media metadata", () => {
+  test("detects video from mediaAssetType and skips poster frame", () => {
+    const parsed = ICloud.parsePhotos(mediaFixture);
+    const video = parsed.find((p) => p.photoGuid.startsWith("1111"));
+    assert.equal(video.mediaType, "video");
+    assert.equal(video.checksum, "video-720-checksum");
+    assert.equal(video.fileSize, 5400000);
+  });
+
+  test("detects live photo companion derivative", () => {
+    const parsed = ICloud.parsePhotos(mediaFixture);
+    const live = parsed.find((p) => p.photoGuid.startsWith("2222"));
+    assert.equal(live.mediaType, "live-photo");
+    assert.equal(live.checksum, "live-still-checksum");
+    assert.equal(live.companionChecksum, "live-video-checksum");
+  });
+
+  test("resolveItemType prefers stream metadata over extension", () => {
+    const parsed = ICloud.parsePhotos(mediaFixture);
+    const video = parsed.find((p) => p.mediaType === "video");
+    assert.equal(ICloud.resolveItemType(video, "/path/file.jpg"), "video");
   });
 });
 

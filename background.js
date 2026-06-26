@@ -28,11 +28,11 @@ try {
 const {
   extractToken,
   parsePhotos,
-  classifyByExtension,
   extractFilename,
   fetchStream,
   fetchAssetURLs,
   buildFilename,
+  resolveItemType,
 } = self.ICloud;
 
 const DOWNLOAD_JOB_KEY = "downloadJob";
@@ -67,7 +67,16 @@ async function scanAlbum(albumURL) {
   const albumTitle = stream.streamName || stream.albumName || stream.title || null;
 
   if (parsed.length === 0) {
-    return { totalItems: 0, photos: 0, videos: 0, totalSize: 0, items: [], albumTitle };
+    return {
+      totalItems: 0,
+      photos: 0,
+      videos: 0,
+      heicCount: 0,
+      livePhotoCount: 0,
+      totalSize: 0,
+      items: [],
+      albumTitle,
+    };
   }
 
   const estimatedSize = parsed.reduce((sum, p) => sum + p.fileSize, 0);
@@ -85,18 +94,35 @@ async function scanAlbum(albumURL) {
   const items = [];
   let photoCount = 0;
   let videoCount = 0;
+  let heicCount = 0;
+  let livePhotoCount = 0;
   let totalSize = 0;
 
   for (const p of parsed) {
     const url = urlMap.get(p.checksum);
-    if (!url) continue; // thumbnail or unresolvable
+    if (!url) continue;
 
     const filename = extractFilename(url);
-    const type = classifyByExtension(url);
+    const type = resolveItemType(p, url);
 
     if (type === "video") videoCount++;
     else photoCount++;
+    if (p.mediaType === "live-photo") livePhotoCount++;
+    if (/\.heic$/i.test(filename)) heicCount++;
     totalSize += p.fileSize;
+
+    let liveCompanion = null;
+    if (p.companionChecksum) {
+      const companionUrl = urlMap.get(p.companionChecksum);
+      if (companionUrl) {
+        liveCompanion = {
+          url: companionUrl,
+          filename: extractFilename(companionUrl),
+          fileSize: p.companionFileSize,
+          checksum: p.companionChecksum,
+        };
+      }
+    }
 
     items.push({
       photoGuid: p.photoGuid,
@@ -104,8 +130,10 @@ async function scanAlbum(albumURL) {
       url,
       filename,
       type,
+      mediaType: p.mediaType,
       fileSize: p.fileSize,
       dateCreated: p.dateCreated,
+      liveCompanion,
     });
   }
 
@@ -113,12 +141,36 @@ async function scanAlbum(albumURL) {
     totalItems: items.length,
     photos: photoCount,
     videos: videoCount,
+    heicCount,
+    livePhotoCount,
     totalSize,
     items,
     baseURL,
     token,
     albumTitle,
   };
+}
+
+function expandDownloadItems(items, includeLivePhotoVideos) {
+  if (!includeLivePhotoVideos) return items;
+
+  const expanded = [];
+  for (const item of items) {
+    expanded.push(item);
+    if (!item.liveCompanion?.url) continue;
+
+    expanded.push({
+      photoGuid: `${item.photoGuid}:live`,
+      checksum: item.liveCompanion.checksum,
+      url: item.liveCompanion.url,
+      filename: item.liveCompanion.filename,
+      type: "video",
+      fileSize: item.liveCompanion.fileSize,
+      dateCreated: item.dateCreated,
+      isLiveCompanion: true,
+    });
+  }
+  return expanded;
 }
 
 function createEmptyDownloadState() {
@@ -215,16 +267,17 @@ async function downloadFile(item, folderPrefix, filenamePattern) {
 
 async function runDownloadQueue(toDownload, folderPrefix, { filter = "all", albumUrl = "", reportFailures = true } = {}) {
   const settings = await loadSettings();
+  const expanded = expandDownloadItems(toDownload, settings.includeLivePhotoVideos);
 
   downloadState.active = true;
-  downloadState.total = toDownload.length;
+  downloadState.total = expanded.length;
   downloadState.completed = 0;
   downloadState.failed = 0;
   downloadState.errors = [];
   downloadState.failedItems = [];
   broadcastProgress();
 
-  const queue = [...toDownload];
+  const queue = [...expanded];
   const inFlight = new Set();
 
   while ((queue.length > 0 || inFlight.size > 0) && downloadState.active) {
