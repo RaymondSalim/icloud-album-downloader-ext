@@ -35,6 +35,7 @@ const completeSection  = $("#complete-section");
 const completeSummary  = $("#complete-summary");
 const completeErrors   = $("#complete-errors");
 const completeErrorsText = $("#complete-errors-text");
+const btnRetryFailed     = $("#btn-retry-failed");
 const btnReset         = $("#btn-reset");
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -243,8 +244,42 @@ function showComplete(state) {
   if (state.failed > 0) {
     completeErrors.style.display = "block";
     completeErrorsText.textContent = `${state.failed} file(s) failed: ${state.errors.map((e) => e.filename).join(", ")}`;
+    btnRetryFailed.style.display = "block";
+    btnRetryFailed.textContent = `Retry failed (${state.failed})`;
   } else {
     completeErrors.style.display = "none";
+    btnRetryFailed.style.display = "none";
+  }
+}
+
+async function handleRetryFailed() {
+  hideError();
+  showSection(progressSection);
+  progressCount.textContent = "0";
+  progressTotal.textContent = "…";
+  progressBar.style.width = "0%";
+  progressFailed.style.display = "none";
+  btnRetryFailed.style.display = "none";
+
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "retry-failed" });
+    if (!response?.ok) {
+      showError(response?.error || "Retry failed to start.", {
+        report: true,
+        context: { operation: "download", albumUrl: albumURLInput.value.trim() },
+      });
+      showSection(completeSection);
+    }
+  } catch (err) {
+    showError(`Retry error: ${err.message}`, {
+      report: true,
+      context: {
+        operation: "download",
+        albumUrl: albumURLInput.value.trim(),
+        stack: err.stack,
+      },
+    });
+    showSection(completeSection);
   }
 }
 
@@ -301,6 +336,7 @@ btnDownloadAll.addEventListener("click", () => handleDownload("all"));
 btnDownloadPhotos.addEventListener("click", () => handleDownload("photos"));
 btnDownloadVideos.addEventListener("click", () => handleDownload("videos"));
 btnCancel.addEventListener("click", handleCancel);
+btnRetryFailed.addEventListener("click", handleRetryFailed);
 btnReset.addEventListener("click", handleReset);
 
 // ── Init ─────────────────────────────────────────────────────────────────────

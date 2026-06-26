@@ -90,3 +90,12 @@ REPORT_ENDPOINT="https://..." REPORT_SECRET="..." ./build.sh --prod
 ```
 
 Do not upload local builds to the stores if you already use GitHub Releases.
+
+## Changelog
+
+### 1.2.0
+
+- Extract iCloud API helpers to `lib/icloud.js` with Node unit tests
+- Chunk `webasseturls` requests (100 GUIDs per batch) for large albums
+- Retry API calls on HTTP 429/5xx with exponential backoff
+- Retry failed downloads from the completion screen

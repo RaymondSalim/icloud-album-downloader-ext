@@ -1,0 +1,43 @@
+{
+  "photos": [
+    {
+      "photoGuid": "11111111-1111-1111-1111-111111111111",
+      "dateCreated": "2024-01-15T10:00:00Z",
+      "caption": "Beach sunset",
+      "batchGuid": "batch-a",
+      "derivatives": {
+        "thumb": {
+          "checksum": "thumb-checksum-aaa",
+          "fileSize": "45000"
+        },
+        "fullsize": {
+          "checksum": "full-checksum-aaa",
+          "fileSize": "3200000"
+        }
+      }
+    },
+    {
+      "photoGuid": "22222222-2222-2222-2222-222222222222",
+      "dateCreated": "2024-02-20T14:30:00Z",
+      "caption": null,
+      "batchGuid": "batch-b",
+      "derivatives": {
+        "medium": {
+          "checksum": "med-checksum-bbb",
+          "fileSize": "800000"
+        },
+        "original": {
+          "checksum": "orig-checksum-bbb",
+          "fileSize": "5100000"
+        }
+      }
+    },
+    {
+      "photoGuid": "33333333-3333-3333-3333-333333333333",
+      "dateCreated": "2024-03-01T08:00:00Z",
+      "caption": "No derivatives",
+      "batchGuid": "batch-c",
+      "derivatives": {}
+    }
+  ]
+}
