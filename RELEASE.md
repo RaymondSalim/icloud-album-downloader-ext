@@ -99,3 +99,11 @@ Do not upload local builds to the stores if you already use GitHub Releases.
 - Chunk `webasseturls` requests (100 GUIDs per batch) for large albums
 - Retry API calls on HTTP 429/5xx with exponential backoff
 - Retry failed downloads from the completion screen
+
+### 1.3.0
+
+- Persist download job state in `chrome.storage.session` (survives service worker restarts)
+- Desktop notification when a download batch finishes
+- Scan progress UI during URL resolution with estimated size
+- Pre-download summary (destination path, large-album warnings)
+- Options page: filename pattern and concurrent download limit

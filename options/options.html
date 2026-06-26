@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>iCloud Album Downloader — Options</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>iCloud Album Downloader</h1>
+      <p class="subtitle">Download settings</p>
+    </header>
+
+    <form id="options-form">
+      <div class="field">
+        <label for="filename-pattern">Filename pattern</label>
+        <select id="filename-pattern" name="filenamePattern">
+          <option value="original">Original filename</option>
+          <option value="date-prefix">Date prefix (YYYY-MM-DD_original)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="max-concurrent">Concurrent downloads</label>
+        <input type="number" id="max-concurrent" name="maxConcurrent" min="1" max="5" step="1" />
+        <p class="hint">How many files to download at once (1–5).</p>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <span id="save-status" class="save-status" aria-live="polite"></span>
+      </div>
+    </form>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>

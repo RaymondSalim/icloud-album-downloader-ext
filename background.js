@@ -19,7 +19,11 @@ try {
 } catch {
   // Firefox loads lib/icloud.js via manifest background.scripts
 }
-
+try {
+  importScripts("lib/settings.js");
+} catch {
+  // Firefox loads lib/settings.js via manifest background.scripts
+}
 
 const {
   extractToken,
@@ -28,20 +32,25 @@ const {
   extractFilename,
   fetchStream,
   fetchAssetURLs,
+  buildFilename,
 } = self.ICloud;
 
-const MAX_CONCURRENT_DOWNLOADS = 3;
+const DOWNLOAD_JOB_KEY = "downloadJob";
+const NOTIFICATION_ID = "download-complete";
+
+let stateRestored = false;
 
 function isUserFacingAPIError(err) {
   return err && err.name === "ICloudAPIError" && err.status === 404;
 }
 
-function broadcastScanProgress(done, total) {
+function broadcastScanProgress(done, total, extra = {}) {
   chrome.runtime.sendMessage({
     type: "scan-progress",
-    phase: "resolving",
+    phase: extra.phase || "resolving",
     done,
     total,
+    estimatedSize: extra.estimatedSize,
   }).catch(() => {
     // Popup might be closed
   });
@@ -55,15 +64,21 @@ async function scanAlbum(albumURL) {
 
   const { stream, baseURL } = await fetchStream(token);
   const parsed = parsePhotos(stream);
+  const albumTitle = stream.streamName || stream.albumName || stream.title || null;
 
   if (parsed.length === 0) {
-    return { totalItems: 0, photos: 0, videos: 0, totalSize: 0, items: [] };
+    return { totalItems: 0, photos: 0, videos: 0, totalSize: 0, items: [], albumTitle };
   }
+
+  const estimatedSize = parsed.reduce((sum, p) => sum + p.fileSize, 0);
+  broadcastScanProgress(0, parsed.length, { phase: "resolving", estimatedSize });
 
   // Fetch asset URLs for all items (chunked for large albums)
   const guids = parsed.map((p) => p.photoGuid);
   const urlMap = await fetchAssetURLs(baseURL, guids, {
-    onProgress: (done, total) => broadcastScanProgress(done, total),
+    onProgress: (done, total) => {
+      broadcastScanProgress(done, total, { phase: "resolving", estimatedSize });
+    },
   });
 
   // Build final item list with classification
@@ -102,27 +117,12 @@ async function scanAlbum(albumURL) {
     items,
     baseURL,
     token,
+    albumTitle,
   };
 }
 
-// ── Download Manager ─────────────────────────────────────────────────────────
-
-let downloadState = {
-  active: false,
-  total: 0,
-  completed: 0,
-  failed: 0,
-  skipped: 0,
-  currentItems: [],
-  errors: [],
-  failedItems: [],
-  albumUrl: "",
-  folderPrefix: "",
-  filter: "all",
-};
-
-function resetDownloadState() {
-  downloadState = {
+function createEmptyDownloadState() {
+  return {
     active: false,
     total: 0,
     completed: 0,
@@ -137,8 +137,63 @@ function resetDownloadState() {
   };
 }
 
-async function downloadFile(item, folderPrefix) {
-  const filename = folderPrefix ? `${folderPrefix}/${item.filename}` : item.filename;
+// ── Download Manager ─────────────────────────────────────────────────────────
+
+let downloadState = createEmptyDownloadState();
+
+async function persistDownloadState() {
+  if (!chrome.storage?.session) return;
+  try {
+    await chrome.storage.session.set({ [DOWNLOAD_JOB_KEY]: downloadState });
+  } catch {
+    // Session storage unavailable or quota exceeded
+  }
+}
+
+async function restoreDownloadState() {
+  if (!chrome.storage?.session) return;
+  try {
+    const data = await chrome.storage.session.get(DOWNLOAD_JOB_KEY);
+    if (data[DOWNLOAD_JOB_KEY]) {
+      downloadState = { ...createEmptyDownloadState(), ...data[DOWNLOAD_JOB_KEY] };
+    }
+    stateRestored = true;
+  } catch {
+    stateRestored = true;
+  }
+}
+
+async function clearPersistedDownloadState() {
+  if (!chrome.storage?.session) return;
+  try {
+    await chrome.storage.session.remove(DOWNLOAD_JOB_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function resetDownloadState() {
+  downloadState = createEmptyDownloadState();
+  clearPersistedDownloadState();
+}
+
+function notifyDownloadComplete(state) {
+  if (state.total === 0 || !chrome.notifications?.create) return;
+
+  const { completed, failed } = state;
+  const body = failed > 0
+    ? `${completed} saved, ${failed} failed — open extension to retry`
+    : `${completed} file${completed === 1 ? "" : "s"} saved`;
+
+  chrome.notifications.create(NOTIFICATION_ID, {
+    type: "basic",
+    title: "iCloud Album download complete",
+    message: body,
+  });
+}
+
+async function downloadFile(item, folderPrefix, filenamePattern) {
+  const filename = buildFilename(item, { prefix: folderPrefix, pattern: filenamePattern });
   return new Promise((resolve) => {
     chrome.downloads.download(
       {
@@ -159,6 +214,8 @@ async function downloadFile(item, folderPrefix) {
 }
 
 async function runDownloadQueue(toDownload, folderPrefix, { filter = "all", albumUrl = "", reportFailures = true } = {}) {
+  const settings = await loadSettings();
+
   downloadState.active = true;
   downloadState.total = toDownload.length;
   downloadState.completed = 0;
@@ -171,9 +228,9 @@ async function runDownloadQueue(toDownload, folderPrefix, { filter = "all", albu
   const inFlight = new Set();
 
   while ((queue.length > 0 || inFlight.size > 0) && downloadState.active) {
-    while (inFlight.size < MAX_CONCURRENT_DOWNLOADS && queue.length > 0 && downloadState.active) {
+    while (inFlight.size < settings.maxConcurrent && queue.length > 0 && downloadState.active) {
       const item = queue.shift();
-      const promise = downloadFile(item, folderPrefix)
+      const promise = downloadFile(item, folderPrefix, settings.filenamePattern)
         .then((result) => {
           inFlight.delete(promise);
           if (result.success) {
@@ -205,6 +262,7 @@ async function runDownloadQueue(toDownload, folderPrefix, { filter = "all", albu
 
   downloadState.active = false;
   broadcastProgress();
+  notifyDownloadComplete(downloadState);
 
   if (reportFailures && downloadState.failed > 0) {
     reportError({
@@ -247,6 +305,7 @@ async function retryFailed() {
 }
 
 function broadcastProgress() {
+  persistDownloadState();
   chrome.runtime.sendMessage({
     type: "download-progress",
     state: { ...downloadState },
@@ -342,17 +401,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === "get-progress") {
-    sendResponse({ ok: true, state: { ...downloadState } });
-    return false;
+    (async () => {
+      if (!stateRestored) await restoreDownloadState();
+      sendResponse({ ok: true, state: { ...downloadState } });
+    })();
+    return true;
   }
 
   if (msg.type === "cancel") {
     // Clear the queue by marking inactive — in-flight downloads will complete
     downloadState.active = false;
+    persistDownloadState();
     sendResponse({ ok: true });
     return false;
   }
 });
+
+restoreDownloadState();
 
 self.addEventListener("unhandledrejection", (event) => {
   const reason = event.reason;

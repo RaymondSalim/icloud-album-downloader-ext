@@ -228,6 +228,22 @@ input::placeholder {
 
 /* ── Album Info ───────────────────────────────────────────────────────────── */
 
+.loading-size-hint {
+  margin-top: 6px;
+  color: var(--text-secondary);
+}
+
+.download-destination {
+  margin-top: 4px;
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+}
+
+.album-warning {
+  color: var(--video-accent);
+  margin-bottom: 10px;
+}
+
 .album-info h2 {
   font-size: 14px;
   font-weight: 600;
@@ -285,7 +301,7 @@ input::placeholder {
 }
 
 .download-options input {
-  margin-bottom: 4px;
+  margin-bottom: 0;
 }
 
 /* ── Progress ─────────────────────────────────────────────────────────────── */

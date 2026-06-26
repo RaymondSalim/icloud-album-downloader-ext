@@ -52,12 +52,14 @@
     <!-- Loading -->
     <section id="loading-section" class="loading-section" style="display:none">
       <div class="spinner"></div>
-      <p>Scanning album...</p>
+      <p id="loading-status">Scanning album...</p>
+      <p class="hint loading-size-hint" id="loading-size-hint" style="display:none"></p>
     </section>
 
     <!-- Album Info -->
     <section id="album-info" class="album-info" style="display:none">
-      <h2>Album Contents</h2>
+      <h2 id="album-title">Album Contents</h2>
+      <p class="hint album-warning" id="album-warning" style="display:none"></p>
       <div class="stats-grid">
         <div class="stat-card">
           <span class="stat-value" id="stat-total">0</span>
@@ -86,6 +88,7 @@
           placeholder="iCloud Album"
           spellcheck="false"
         />
+        <p class="hint download-destination" id="download-destination" style="display:none"></p>
         <div class="btn-group">
           <button id="btn-download-all" class="btn btn-primary btn-block">
             Download All

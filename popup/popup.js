@@ -11,7 +11,12 @@ const errorText        = $("#error-text");
 const errorReportHint  = $("#error-report-hint");
 
 const loadingSection   = $("#loading-section");
+const loadingStatus    = $("#loading-status");
+const loadingSizeHint  = $("#loading-size-hint");
 const albumInfo        = $("#album-info");
+const albumTitle       = $("#album-title");
+const downloadDestination = $("#download-destination");
+const albumWarning     = $("#album-warning");
 
 const statTotal        = $("#stat-total");
 const statPhotos       = $("#stat-photos");
@@ -127,6 +132,8 @@ async function handleScan() {
   }
 
   showSection(loadingSection);
+  loadingStatus.textContent = "Scanning album...";
+  loadingSizeHint.style.display = "none";
   btnScan.disabled = true;
 
   try {
@@ -164,10 +171,26 @@ async function handleScan() {
 function renderAlbumInfo(data) {
   showSection(albumInfo);
 
+  albumTitle.textContent = data.albumTitle || "Album Contents";
+
   statTotal.textContent = data.totalItems;
   statPhotos.textContent = data.photos;
   statVideos.textContent = data.videos;
   statSize.textContent = formatBytes(data.totalSize);
+
+  const folder = folderInput.value.trim() || "iCloud Album";
+  downloadDestination.style.display = "block";
+  downloadDestination.textContent = `Will download to Downloads/${folder}/`;
+
+  const warnings = [];
+  if (data.totalSize > 1024 ** 3) warnings.push("Album is over 1 GB");
+  if (data.totalItems > 500) warnings.push("Album has more than 500 items");
+  if (warnings.length > 0) {
+    albumWarning.style.display = "block";
+    albumWarning.textContent = `${warnings.join(" · ")} — download may take a while.`;
+  } else {
+    albumWarning.style.display = "none";
+  }
 
   // Show/hide type-specific download buttons
   btnDownloadPhotos.style.display = data.photos > 0 && data.videos > 0 ? "inline-flex" : "none";
@@ -176,8 +199,15 @@ function renderAlbumInfo(data) {
   // Pre-fill folder name from URL token
   if (data.token && !folderInput.value) {
     folderInput.value = `iCloud Album ${data.token.substring(0, 8)}`;
+    downloadDestination.textContent = `Will download to Downloads/${folderInput.value}/`;
   }
 }
+
+folderInput.addEventListener("input", () => {
+  if (!scannedData) return;
+  const folder = folderInput.value.trim() || "iCloud Album";
+  downloadDestination.textContent = `Will download to Downloads/${folder}/`;
+});
 
 // ── Download ─────────────────────────────────────────────────────────────────
 
@@ -283,22 +313,39 @@ async function handleRetryFailed() {
   }
 }
 
+function applyProgressUI(s) {
+  const done = s.completed + s.failed;
+  const pct = s.total > 0 ? Math.round((done / s.total) * 100) : 0;
+
+  progressCount.textContent = done;
+  progressTotal.textContent = s.total;
+  progressBar.style.width = `${pct}%`;
+
+  if (s.failed > 0) {
+    progressFailed.style.display = "inline";
+    failedCount.textContent = s.failed;
+  } else {
+    progressFailed.style.display = "none";
+  }
+}
+
 // ── Progress Listener ────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === "scan-progress") {
+    if (msg.phase === "resolving" && msg.total > 0) {
+      loadingStatus.textContent = `Resolving URLs… ${msg.done} / ${msg.total}`;
+      if (msg.estimatedSize) {
+        loadingSizeHint.style.display = "block";
+        loadingSizeHint.textContent = `Estimated size: ${formatBytes(msg.estimatedSize)}`;
+      }
+    }
+    return;
+  }
+
   if (msg.type === "download-progress") {
     const s = msg.state;
-    const done = s.completed + s.failed;
-    const pct = s.total > 0 ? Math.round((done / s.total) * 100) : 0;
-
-    progressCount.textContent = done;
-    progressTotal.textContent = s.total;
-    progressBar.style.width = `${pct}%`;
-
-    if (s.failed > 0) {
-      progressFailed.style.display = "inline";
-      failedCount.textContent = s.failed;
-    }
+    applyProgressUI(s);
 
     // Download finished (active turned false by background worker)
     if (!s.active && s.total > 0) {
@@ -344,19 +391,26 @@ btnReset.addEventListener("click", handleReset);
 // Restore progress view if a download is already running
 async function checkExistingDownload() {
   try {
+    let state = null;
     const response = await chrome.runtime.sendMessage({ type: "get-progress" });
-    if (response.ok && response.state.active && response.state.total > 0) {
-      showSection(progressSection);
-      const s = response.state;
-      const done = s.completed + s.failed;
-      const pct = s.total > 0 ? Math.round((done / s.total) * 100) : 0;
-      progressCount.textContent = done;
-      progressTotal.textContent = s.total;
-      progressBar.style.width = `${pct}%`;
-      if (s.failed > 0) {
-        progressFailed.style.display = "inline";
-        failedCount.textContent = s.failed;
+    if (response?.ok) state = response.state;
+
+    if (!state || (!state.active && state.total === 0)) {
+      try {
+        const stored = await chrome.storage.session.get("downloadJob");
+        if (stored.downloadJob) state = stored.downloadJob;
+      } catch {
+        // session storage unavailable in this context
       }
+    }
+
+    if (!state || state.total === 0) return;
+
+    if (state.active) {
+      showSection(progressSection);
+      applyProgressUI(state);
+    } else {
+      showComplete(state);
     }
   } catch {
     // Service worker not ready yet — fine
