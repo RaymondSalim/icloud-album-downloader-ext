@@ -122,9 +122,18 @@ node scripts/send-test-report.js
 
 Reports include: operation type, error message, stack trace, album URL, extension version, browser info, and (for download failures) a sample of failed filenames. Validation mistakes (empty URL, wrong format) are not reported. Duplicate identical errors within 60 seconds are deduplicated. The worker rate-limits to 20 reports per IP per hour.
 
+## FAQ
+
+**HEIC photos** — iCloud serves shared albums in Apple's formats when available. HEIC files are downloaded as-is; the extension does not convert them to JPEG. Open them with Photos, Preview, or another HEIC-capable app.
+
+**Live Photos** — A Live Photo is a still image plus a short video clip. By default only the still is downloaded. Turn on **Download Live Photo videos** in extension options to also save the companion video (separate `.mov`/`.mp4` next to the still).
+
+**Videos** — Pure videos are detected from iCloud stream metadata (`mediaAssetType: video`), not only from the file extension. Shared albums may cap video resolution (often 720p).
+
 ## Limitations
 
 - Only works with **shared** iCloud albums (public links with `#token`)
 - Very large albums may take time; the iCloud API may throttle requests
-- Video detection relies on file extension in the download URL
+- HEIC files are not converted to JPEG
+- Live Photo videos are optional and download as separate files (not a single `.livephoto` bundle)
 - Apple could change the undocumented API at any time

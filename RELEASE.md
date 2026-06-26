@@ -107,3 +107,9 @@ Do not upload local builds to the stores if you already use GitHub Releases.
 - Scan progress UI during URL resolution with estimated size
 - Pre-download summary (destination path, large-album warnings)
 - Options page: filename pattern and concurrent download limit
+
+### 1.4.0
+
+- Detect videos from iCloud stream metadata (`mediaAssetType`), not only file extensions
+- Optional Live Photo companion video downloads (extension options)
+- HEIC and Live Photo notes in README; scan warnings for HEIC/Live Photo albums

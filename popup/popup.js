@@ -185,6 +185,12 @@ function renderAlbumInfo(data) {
   const warnings = [];
   if (data.totalSize > 1024 ** 3) warnings.push("Album is over 1 GB");
   if (data.totalItems > 500) warnings.push("Album has more than 500 items");
+  if (data.heicCount > 0) {
+    warnings.push(`${data.heicCount} HEIC photo(s) download as-is (no conversion)`);
+  }
+  if (data.livePhotoCount > 0) {
+    warnings.push(`${data.livePhotoCount} Live Photo(s) — enable companion videos in extension options if needed`);
+  }
   if (warnings.length > 0) {
     albumWarning.style.display = "block";
     albumWarning.textContent = `${warnings.join(" · ")} — download may take a while.`;
