@@ -101,6 +101,26 @@ function isCountPayload(body) {
   return body.kind === "count";
 }
 
+function errorSlackWebhook(env) {
+  return env.SLACK_ERROR_WEBHOOK_URL || env.SLACK_WEBHOOK_URL;
+}
+
+function summarySlackWebhook(env) {
+  return env.SLACK_SUMMARY_WEBHOOK_URL || env.SLACK_WEBHOOK_URL;
+}
+
+async function postToSlack(webhookUrl, payload) {
+  const slackRes = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!slackRes.ok) {
+    throw new Error(`slack_failed:${slackRes.status}`);
+  }
+}
+
 function telemetryKv(env) {
   return env.icloud_extension_telemetry;
 }
@@ -137,7 +157,8 @@ async function deleteDayStats(env, date) {
 }
 
 async function flushDayStats(env, date) {
-  if (!env.SLACK_WEBHOOK_URL) return;
+  const webhookUrl = summarySlackWebhook(env);
+  if (!webhookUrl) return;
 
   const stats = await readDayStats(env, date);
   const total = stats.scanOk + stats.downloadOk + stats.errors;
@@ -146,16 +167,7 @@ async function flushDayStats(env, date) {
     return;
   }
 
-  const slackRes = await fetch(env.SLACK_WEBHOOK_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(buildDailyAggregateSlackPayload(stats)),
-  });
-
-  if (!slackRes.ok) {
-    throw new Error(`slack_failed:${slackRes.status}`);
-  }
-
+  await postToSlack(webhookUrl, buildDailyAggregateSlackPayload(stats));
   await deleteDayStats(env, date);
 }
 
@@ -202,26 +214,17 @@ async function handleCount(body, env) {
 }
 
 async function handleError(body, env) {
-  await incrementStat(env, utcDateString(), "errors");
-
-  const slackRes = await fetch(env.SLACK_WEBHOOK_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(buildErrorSlackPayload(body)),
-  });
-
-  if (!slackRes.ok) {
-    return jsonResponse({ ok: false, error: "slack_failed", status: slackRes.status }, 502);
+  const webhookUrl = errorSlackWebhook(env);
+  if (!webhookUrl) {
+    return jsonResponse({ ok: false, error: "server_misconfigured" }, 500);
   }
 
+  await incrementStat(env, utcDateString(), "errors");
+  await postToSlack(webhookUrl, buildErrorSlackPayload(body));
   return jsonResponse({ ok: true });
 }
 
 async function handleReport(request, env) {
-  if (!env.SLACK_WEBHOOK_URL) {
-    return jsonResponse({ ok: false, error: "server_misconfigured" }, 500);
-  }
-
   const authError = await authorize(request, env);
   if (authError) return authError;
 
@@ -266,7 +269,7 @@ export default {
   },
 
   async scheduled(_event, env) {
-    if (!env.SLACK_WEBHOOK_URL) return;
+    if (!summarySlackWebhook(env)) return;
 
     const yesterday = utcDateString(-1);
     try {

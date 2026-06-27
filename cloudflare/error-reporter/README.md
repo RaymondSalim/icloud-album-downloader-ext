@@ -9,8 +9,9 @@ cd cloudflare/error-reporter
 npm install -g wrangler   # or: npx wrangler
 wrangler login
 
-# Required: your Slack incoming webhook URL
-wrangler secret put SLACK_WEBHOOK_URL
+# Required: Slack incoming webhooks (one per channel)
+wrangler secret put SLACK_ERROR_WEBHOOK_URL
+wrangler secret put SLACK_SUMMARY_WEBHOOK_URL
 
 # Recommended: shared secret the extension sends as Authorization: Bearer <secret>
 wrangler secret put REPORT_SECRET
