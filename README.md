@@ -77,7 +77,8 @@ See [`cloudflare/error-reporter/README.md`](cloudflare/error-reporter/README.md)
 ```bash
 cd cloudflare/error-reporter
 wrangler login
-wrangler secret put SLACK_WEBHOOK_URL    # Slack incoming webhook
+wrangler secret put SLACK_ERROR_WEBHOOK_URL    # Slack incoming webhook (errors channel)
+wrangler secret put SLACK_SUMMARY_WEBHOOK_URL  # Slack incoming webhook (daily summary channel)
 wrangler secret put REPORT_SECRET        # shared secret for the extension
 wrangler deploy
 ```

@@ -3,8 +3,11 @@ main = "src/index.js"
 compatibility_date = "2024-06-01"
 
 # Set secrets before deploy:
-#   npx wrangler secret put SLACK_WEBHOOK_URL
+#   npx wrangler secret put SLACK_ERROR_WEBHOOK_URL    # errors channel
+#   npx wrangler secret put SLACK_SUMMARY_WEBHOOK_URL # daily summary channel
 #   npx wrangler secret put REPORT_SECRET
+#
+# Legacy: SLACK_WEBHOOK_URL is used as fallback when the above are unset.
 #
 # KV for daily success/error counters (required for daily Slack summary):
 #   npx wrangler kv namespace create icloud-extension-telemetry
