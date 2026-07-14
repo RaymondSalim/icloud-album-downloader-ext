@@ -198,6 +198,10 @@ input::placeholder {
   margin-top: 1px;
 }
 
+#btn-error-retry {
+  margin-top: 8px;
+}
+
 /* ── Loading ──────────────────────────────────────────────────────────────── */
 
 .loading-section {

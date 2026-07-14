@@ -9,6 +9,7 @@ const autoDetectHint   = $("#auto-detect-hint");
 const errorSection     = $("#error-section");
 const errorText        = $("#error-text");
 const errorReportHint  = $("#error-report-hint");
+const btnErrorRetry    = $("#btn-error-retry");
 
 const loadingSection   = $("#loading-section");
 const loadingStatus    = $("#loading-status");
@@ -57,10 +58,18 @@ function formatBytes(bytes) {
   return `${val.toFixed(i > 1 ? 1 : 0)} ${units[i]}`;
 }
 
-function showError(msg, { report = false, context = {} } = {}) {
+function showError(msg, { report = false, context = {}, retry = null } = {}) {
   errorText.textContent = msg;
   errorSection.style.display = "block";
   errorReportHint.style.display = "none";
+
+  if (retry) {
+    btnErrorRetry.style.display = "block";
+    btnErrorRetry.onclick = retry;
+  } else {
+    btnErrorRetry.style.display = "none";
+    btnErrorRetry.onclick = null;
+  }
 
   if (report) {
     reportErrorToBackground({
@@ -75,6 +84,8 @@ function showError(msg, { report = false, context = {} } = {}) {
 function hideError() {
   errorSection.style.display = "none";
   errorReportHint.style.display = "none";
+  btnErrorRetry.style.display = "none";
+  btnErrorRetry.onclick = null;
 }
 
 // Wraps chrome.runtime.sendMessage with one retry for the MV3 service-worker
@@ -173,6 +184,7 @@ async function handleScan() {
         albumUrl: url,
         stack: err.stack,
       },
+      retry: err.name === "ExtensionConnectionError" ? handleScan : null,
     });
   }
 }
@@ -277,6 +289,7 @@ async function handleDownload(filter) {
         filter,
         stack: err.stack,
       },
+      retry: err.name === "ExtensionConnectionError" ? () => handleDownload(filter) : null,
     });
     showSection(albumInfo);
   }
@@ -323,6 +336,7 @@ async function handleRetryFailed() {
         albumUrl: albumURLInput.value.trim(),
         stack: err.stack,
       },
+      retry: err.name === "ExtensionConnectionError" ? handleRetryFailed : null,
     });
     showSection(completeSection);
   }
@@ -375,7 +389,10 @@ async function handleCancel() {
   try {
     await sendMessage({ type: "cancel" });
   } catch (err) {
-    showError(`Cancel failed: ${err.message}`, { report: err.name !== "ExtensionConnectionError" });
+    showError(`Cancel failed: ${err.message}`, {
+      report: err.name !== "ExtensionConnectionError",
+      retry: err.name === "ExtensionConnectionError" ? handleCancel : null,
+    });
   }
   showSection(albumInfo);
 }
