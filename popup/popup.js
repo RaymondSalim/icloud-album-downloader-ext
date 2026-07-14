@@ -77,9 +77,18 @@ function hideError() {
   errorReportHint.style.display = "none";
 }
 
+// Wraps chrome.runtime.sendMessage with one retry for the MV3 service-worker
+// wake-up race ("Could not establish connection. Receiving end does not exist.").
+function sendMessage(message) {
+  return Messaging.sendMessageWithRetry(
+    (msg) => chrome.runtime.sendMessage(msg),
+    message
+  );
+}
+
 async function reportErrorToBackground(context) {
   try {
-    const response = await chrome.runtime.sendMessage({
+    const response = await sendMessage({
       type: "report-error",
       userAgent: navigator.userAgent,
       ...context,
@@ -137,7 +146,7 @@ async function handleScan() {
   btnScan.disabled = true;
 
   try {
-    const response = await chrome.runtime.sendMessage({ type: "scan", url });
+    const response = await sendMessage({ type: "scan", url });
     btnScan.disabled = false;
 
     if (!response.ok) {
@@ -158,7 +167,7 @@ async function handleScan() {
     btnScan.disabled = false;
     showSection(null);
     showError(`Scan failed: ${err.message}`, {
-      report: true,
+      report: err.name !== "ExtensionConnectionError",
       context: {
         operation: "scan",
         albumUrl: url,
@@ -239,7 +248,7 @@ async function handleDownload(filter) {
 
   try {
     // This returns immediately — progress tracked via onMessage listener
-    const response = await chrome.runtime.sendMessage({
+    const response = await sendMessage({
       type: "download",
       items: scannedData.items,
       filter,
@@ -261,7 +270,7 @@ async function handleDownload(filter) {
     // Completion is handled by the progress listener below
   } catch (err) {
     showError(`Download error: ${err.message}`, {
-      report: true,
+      report: err.name !== "ExtensionConnectionError",
       context: {
         operation: "download",
         albumUrl: albumURLInput.value.trim(),
@@ -298,7 +307,7 @@ async function handleRetryFailed() {
   btnRetryFailed.style.display = "none";
 
   try {
-    const response = await chrome.runtime.sendMessage({ type: "retry-failed" });
+    const response = await sendMessage({ type: "retry-failed" });
     if (!response?.ok) {
       showError(response?.error || "Retry failed to start.", {
         report: true,
@@ -308,7 +317,7 @@ async function handleRetryFailed() {
     }
   } catch (err) {
     showError(`Retry error: ${err.message}`, {
-      report: true,
+      report: err.name !== "ExtensionConnectionError",
       context: {
         operation: "download",
         albumUrl: albumURLInput.value.trim(),
@@ -363,7 +372,11 @@ chrome.runtime.onMessage.addListener((msg) => {
 // ── Cancel ───────────────────────────────────────────────────────────────────
 
 async function handleCancel() {
-  await chrome.runtime.sendMessage({ type: "cancel" });
+  try {
+    await sendMessage({ type: "cancel" });
+  } catch (err) {
+    showError(`Cancel failed: ${err.message}`, { report: err.name !== "ExtensionConnectionError" });
+  }
   showSection(albumInfo);
 }
 
@@ -398,7 +411,7 @@ btnReset.addEventListener("click", handleReset);
 async function checkExistingDownload() {
   try {
     let state = null;
-    const response = await chrome.runtime.sendMessage({ type: "get-progress" });
+    const response = await sendMessage({ type: "get-progress" });
     if (response?.ok) state = response.state;
 
     if (!state || (!state.active && state.total === 0)) {
