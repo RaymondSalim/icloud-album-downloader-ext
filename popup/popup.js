@@ -9,6 +9,7 @@ const autoDetectHint   = $("#auto-detect-hint");
 const errorSection     = $("#error-section");
 const errorText        = $("#error-text");
 const errorReportHint  = $("#error-report-hint");
+const btnErrorRetry    = $("#btn-error-retry");
 
 const loadingSection   = $("#loading-section");
 const loadingStatus    = $("#loading-status");
@@ -57,10 +58,18 @@ function formatBytes(bytes) {
   return `${val.toFixed(i > 1 ? 1 : 0)} ${units[i]}`;
 }
 
-function showError(msg, { report = false, context = {} } = {}) {
+function showError(msg, { report = false, context = {}, retry = null } = {}) {
   errorText.textContent = msg;
   errorSection.style.display = "block";
   errorReportHint.style.display = "none";
+
+  if (retry) {
+    btnErrorRetry.style.display = "block";
+    btnErrorRetry.onclick = retry;
+  } else {
+    btnErrorRetry.style.display = "none";
+    btnErrorRetry.onclick = null;
+  }
 
   if (report) {
     reportErrorToBackground({
@@ -75,11 +84,22 @@ function showError(msg, { report = false, context = {} } = {}) {
 function hideError() {
   errorSection.style.display = "none";
   errorReportHint.style.display = "none";
+  btnErrorRetry.style.display = "none";
+  btnErrorRetry.onclick = null;
+}
+
+// Wraps chrome.runtime.sendMessage with one retry for the MV3 service-worker
+// wake-up race ("Could not establish connection. Receiving end does not exist.").
+function sendMessage(message) {
+  return Messaging.sendMessageWithRetry(
+    (msg) => chrome.runtime.sendMessage(msg),
+    message
+  );
 }
 
 async function reportErrorToBackground(context) {
   try {
-    const response = await chrome.runtime.sendMessage({
+    const response = await sendMessage({
       type: "report-error",
       userAgent: navigator.userAgent,
       ...context,
@@ -110,6 +130,7 @@ async function tryAutoDetect() {
     if (tab && tab.url && isICloudAlbumURL(tab.url)) {
       albumURLInput.value = tab.url;
       autoDetectHint.style.display = "block";
+      pokeBackgroundScript();
     }
   } catch {
     // Not critical — user can paste manually
@@ -137,7 +158,7 @@ async function handleScan() {
   btnScan.disabled = true;
 
   try {
-    const response = await chrome.runtime.sendMessage({ type: "scan", url });
+    const response = await sendMessage({ type: "scan", url });
     btnScan.disabled = false;
 
     if (!response.ok) {
@@ -158,12 +179,13 @@ async function handleScan() {
     btnScan.disabled = false;
     showSection(null);
     showError(`Scan failed: ${err.message}`, {
-      report: true,
+      report: err.name !== "ExtensionConnectionError",
       context: {
         operation: "scan",
         albumUrl: url,
         stack: err.stack,
       },
+      retry: err.name === "ExtensionConnectionError" ? handleScan : null,
     });
   }
 }
@@ -239,7 +261,7 @@ async function handleDownload(filter) {
 
   try {
     // This returns immediately — progress tracked via onMessage listener
-    const response = await chrome.runtime.sendMessage({
+    const response = await sendMessage({
       type: "download",
       items: scannedData.items,
       filter,
@@ -261,13 +283,14 @@ async function handleDownload(filter) {
     // Completion is handled by the progress listener below
   } catch (err) {
     showError(`Download error: ${err.message}`, {
-      report: true,
+      report: err.name !== "ExtensionConnectionError",
       context: {
         operation: "download",
         albumUrl: albumURLInput.value.trim(),
         filter,
         stack: err.stack,
       },
+      retry: err.name === "ExtensionConnectionError" ? () => handleDownload(filter) : null,
     });
     showSection(albumInfo);
   }
@@ -298,7 +321,7 @@ async function handleRetryFailed() {
   btnRetryFailed.style.display = "none";
 
   try {
-    const response = await chrome.runtime.sendMessage({ type: "retry-failed" });
+    const response = await sendMessage({ type: "retry-failed" });
     if (!response?.ok) {
       showError(response?.error || "Retry failed to start.", {
         report: true,
@@ -308,12 +331,13 @@ async function handleRetryFailed() {
     }
   } catch (err) {
     showError(`Retry error: ${err.message}`, {
-      report: true,
+      report: err.name !== "ExtensionConnectionError",
       context: {
         operation: "download",
         albumUrl: albumURLInput.value.trim(),
         stack: err.stack,
       },
+      retry: err.name === "ExtensionConnectionError" ? handleRetryFailed : null,
     });
     showSection(completeSection);
   }
@@ -363,7 +387,14 @@ chrome.runtime.onMessage.addListener((msg) => {
 // ── Cancel ───────────────────────────────────────────────────────────────────
 
 async function handleCancel() {
-  await chrome.runtime.sendMessage({ type: "cancel" });
+  try {
+    await sendMessage({ type: "cancel" });
+  } catch (err) {
+    showError(`Cancel failed: ${err.message}`, {
+      report: err.name !== "ExtensionConnectionError",
+      retry: err.name === "ExtensionConnectionError" ? handleCancel : null,
+    });
+  }
   showSection(albumInfo);
 }
 
@@ -380,7 +411,20 @@ function handleReset() {
 
 // ── Event Bindings ───────────────────────────────────────────────────────────
 
+// Wake the background script as soon as the user focuses the URL field, so
+// it's warm by the time they click Scan — reduces (but doesn't eliminate)
+// the MV3 wake-up race that ExtensionConnectionError guards against.
+let backgroundPoked = false;
+function pokeBackgroundScript() {
+  if (backgroundPoked) return;
+  backgroundPoked = true;
+  chrome.runtime.sendMessage({ type: "ping" }).catch(() => {
+    // Best-effort — sendMessage() retry logic still covers a cold background.
+  });
+}
+
 btnScan.addEventListener("click", handleScan);
+albumURLInput.addEventListener("focus", pokeBackgroundScript);
 albumURLInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") handleScan();
 });
@@ -398,7 +442,7 @@ btnReset.addEventListener("click", handleReset);
 async function checkExistingDownload() {
   try {
     let state = null;
-    const response = await chrome.runtime.sendMessage({ type: "get-progress" });
+    const response = await sendMessage({ type: "get-progress" });
     if (response?.ok) state = response.state;
 
     if (!state || (!state.active && state.total === 0)) {

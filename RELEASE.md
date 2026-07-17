@@ -114,6 +114,13 @@ Do not upload local builds to the stores if you already use GitHub Releases.
 - Optional Live Photo companion video downloads (extension options)
 - HEIC and Live Photo notes in README; scan warnings for HEIC/Live Photo albums
 
+### 1.6.0
+
+- Retry MV3 service-worker wake-up race with exponential backoff; friendly error message if retries exhausted
+- Poke background script on focus/auto-detect to reduce connection-race window
+- Actionable Retry button on connection errors (Chrome + Firefox)
+- Extended test coverage for sendMessage retry logic
+
 ### 1.5.0
 
 - Daily aggregate telemetry on Cloudflare Worker (KV counters + UTC cron; skipped when all zero)
