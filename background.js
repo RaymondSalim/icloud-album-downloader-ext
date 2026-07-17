@@ -374,6 +374,12 @@ function broadcastProgress() {
 // ── Message Router ───────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg.type === "ping") {
+    // No-op — just wakes the background script if it was idle/unloaded.
+    sendResponse({ ok: true });
+    return false;
+  }
+
   if (msg.type === "scan") {
     scanAlbum(msg.url)
       .then((result) => {

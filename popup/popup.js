@@ -130,6 +130,7 @@ async function tryAutoDetect() {
     if (tab && tab.url && isICloudAlbumURL(tab.url)) {
       albumURLInput.value = tab.url;
       autoDetectHint.style.display = "block";
+      pokeBackgroundScript();
     }
   } catch {
     // Not critical — user can paste manually
@@ -410,7 +411,20 @@ function handleReset() {
 
 // ── Event Bindings ───────────────────────────────────────────────────────────
 
+// Wake the background script as soon as the user focuses the URL field, so
+// it's warm by the time they click Scan — reduces (but doesn't eliminate)
+// the MV3 wake-up race that ExtensionConnectionError guards against.
+let backgroundPoked = false;
+function pokeBackgroundScript() {
+  if (backgroundPoked) return;
+  backgroundPoked = true;
+  chrome.runtime.sendMessage({ type: "ping" }).catch(() => {
+    // Best-effort — sendMessage() retry logic still covers a cold background.
+  });
+}
+
 btnScan.addEventListener("click", handleScan);
+albumURLInput.addEventListener("focus", pokeBackgroundScript);
 albumURLInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") handleScan();
 });
