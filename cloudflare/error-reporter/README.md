@@ -11,6 +11,7 @@ wrangler login
 
 # Required: Slack incoming webhooks (one per channel)
 wrangler secret put SLACK_ERROR_WEBHOOK_URL
+wrangler secret put SLACK_DIAGNOSTIC_WEBHOOK_URL
 wrangler secret put SLACK_SUMMARY_WEBHOOK_URL
 
 # Recommended: shared secret the extension sends as Authorization: Bearer <secret>
@@ -85,6 +86,31 @@ Body (success ping — no Slack; worker increments daily counter only):
 ```
 
 `metric` is `scan_ok` or `download_ok`.
+
+Body (user-submitted diagnostic report — posts to the diagnostic Slack webhook):
+
+```json
+{
+  "kind": "diagnostic",
+  "operation": "download",
+  "message": "3 of 42 downloads failed",
+  "albumUrl": "",
+  "userIncludedAlbumUrl": false,
+  "version": "1.6.0",
+  "userAgent": "...",
+  "filter": "all",
+  "failedCount": 3,
+  "details": {
+    "completed": 39,
+    "failed": 3,
+    "errors": [
+      { "filename": "IMG_1001.JPG", "error": "Download interrupted" }
+    ]
+  }
+}
+```
+
+Diagnostics use `SLACK_DIAGNOSTIC_WEBHOOK_URL`. If that secret is not set, the worker falls back to `SLACK_ERROR_WEBHOOK_URL` or the legacy `SLACK_WEBHOOK_URL`.
 
 Daily Slack summary (posted by cron, not by the extension):
 
