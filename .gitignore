@@ -2,3 +2,5 @@
 dist/
 config.js
 cloudflare/error-reporter/.wrangler/
+.superpowers/
+.worktrees/

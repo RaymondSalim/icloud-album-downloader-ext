@@ -93,6 +93,13 @@ Do not upload local builds to the stores if you already use GitHub Releases.
 
 ## Changelog
 
+### 1.7.0
+
+- Success prompt linking to Chrome Web Store or Firefox AMO reviews
+- Failure and partial-failure diagnostic reports, sent only after explicit user action
+- Separate Slack routing for user-submitted diagnostics
+- Collapsed diagnostic report controls on failure screens
+
 ### 1.2.0
 
 - Extract iCloud API helpers to `lib/icloud.js` with Node unit tests

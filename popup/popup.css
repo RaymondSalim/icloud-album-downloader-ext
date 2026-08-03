@@ -350,8 +350,19 @@ input::placeholder {
 }
 
 .complete-icon {
-  color: var(--success);
   margin-bottom: 8px;
+}
+
+.complete-icon.success {
+  color: var(--success);
+}
+
+.complete-icon.warning {
+  color: var(--video-accent);
+}
+
+.complete-icon.danger {
+  color: var(--danger);
 }
 
 .complete-section h2 {
@@ -364,6 +375,109 @@ input::placeholder {
   font-size: 12px;
   color: var(--text-secondary);
   margin-bottom: 10px;
+}
+
+.feedback-panel {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  margin-top: 10px;
+  text-align: left;
+}
+
+.feedback-panel h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.feedback-panel p {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 0;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 9px 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.checkbox-row input {
+  margin-top: 2px;
+}
+
+.checkbox-row small {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.diagnostic-status {
+  color: var(--text-secondary);
+}
+
+.diagnostic-status.success {
+  color: var(--success);
+}
+
+.diagnostic-status.error {
+  color: var(--danger);
+}
+
+.diagnostic-dropdown {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  text-align: left;
+}
+
+.diagnostic-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 0;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.diagnostic-chevron {
+  color: var(--text-secondary);
+  font-size: 17px;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.diagnostic-dropdown.open .diagnostic-chevron {
+  transform: rotate(90deg);
+}
+
+.diagnostic-content {
+  padding-bottom: 10px;
+}
+
+.diagnostic-content p {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 0;
+}
+
+.diagnostic-content .checkbox-row {
+  color: var(--text-secondary);
+  margin: 8px 0 10px;
 }
 
 .complete-section .btn-block + .btn-block {

@@ -69,6 +69,46 @@ async function recordDownloadSuccess() {
   return recordSuccess("download_ok");
 }
 
+function sanitizeDiagnosticEntries(entries) {
+  if (!Array.isArray(entries)) return [];
+  return entries.slice(0, 50).map((entry) => ({
+    filename: entry?.filename || entry?.item?.filename || "(unknown)",
+    error: entry?.error || entry?.message || "Unknown error",
+  }));
+}
+
+function sanitizeDiagnosticDetails(details = {}) {
+  return {
+    completed: Number.isFinite(details.completed) ? details.completed : undefined,
+    failed: Number.isFinite(details.failed) ? details.failed : undefined,
+    total: Number.isFinite(details.total) ? details.total : undefined,
+    filter: details.filter || "",
+    failedItems: sanitizeDiagnosticEntries(details.failedItems),
+    errors: sanitizeDiagnosticEntries(details.errors),
+  };
+}
+
+function buildDiagnosticReportPayload(report) {
+  const includeAlbumUrl = Boolean(report.includeAlbumUrl);
+  return {
+    kind: "diagnostic",
+    operation: report.operation || "unknown",
+    message: report.message || "Unknown error",
+    stack: report.stack || "",
+    albumUrl: includeAlbumUrl ? report.albumUrl || "" : "",
+    userIncludedAlbumUrl: includeAlbumUrl,
+    filter: report.filter || "",
+    failedCount: report.failedCount,
+    userAgent: report.userAgent || navigator.userAgent,
+    details: sanitizeDiagnosticDetails(report.details || {}),
+    version: report.version || chrome.runtime.getManifest().version,
+  };
+}
+
+async function sendDiagnosticReport(report) {
+  return postReport(buildDiagnosticReportPayload(report));
+}
+
 async function reportError(report) {
   const payload = {
     kind: "error",
@@ -84,4 +124,11 @@ async function reportError(report) {
   };
 
   return postReport(payload);
+}
+
+if (typeof module !== "undefined") {
+  module.exports = {
+    sanitizeDiagnosticDetails,
+    buildDiagnosticReportPayload,
+  };
 }

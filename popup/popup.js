@@ -10,6 +10,10 @@ const errorSection     = $("#error-section");
 const errorText        = $("#error-text");
 const errorReportHint  = $("#error-report-hint");
 const btnErrorRetry    = $("#btn-error-retry");
+const errorDiagnosticPanel = $("#error-diagnostic-panel");
+const errorIncludeAlbumUrl = $("#error-include-album-url");
+const btnErrorSendDiagnostic = $("#btn-error-send-diagnostic");
+const errorDiagnosticStatus = $("#error-diagnostic-status");
 
 const loadingSection   = $("#loading-section");
 const loadingStatus    = $("#loading-status");
@@ -38,15 +42,32 @@ const failedCount      = $("#failed-count");
 const btnCancel        = $("#btn-cancel");
 
 const completeSection  = $("#complete-section");
+const completeIcon     = $("#complete-icon");
+const completeIconSymbol = $("#complete-icon-symbol");
+const completeHeading  = $("#complete-heading");
 const completeSummary  = $("#complete-summary");
 const completeErrors   = $("#complete-errors");
 const completeErrorsText = $("#complete-errors-text");
+const ratingPrompt     = $("#rating-prompt");
+const btnRateExtension = $("#btn-rate-extension");
 const btnRetryFailed     = $("#btn-retry-failed");
+const diagnosticPanel  = $("#diagnostic-panel");
+const diagnosticToggle = $("#diagnostic-toggle");
+const diagnosticContent = $("#diagnostic-content");
+const includeAlbumUrl  = $("#include-album-url");
+const btnSendDiagnostic = $("#btn-send-diagnostic");
+const diagnosticStatus = $("#diagnostic-status");
 const btnReset         = $("#btn-reset");
+const DIAGNOSTIC_BUTTON_LABEL = "Send diagnostic report";
 
 // ── State ────────────────────────────────────────────────────────────────────
 
 let scannedData = null;
+let currentDiagnosticContext = null;
+let activeDiagnosticControls = null;
+
+const FIREFOX_AMO_REVIEW_URL =
+  "https://addons.mozilla.org/en-US/firefox/addon/icloud-album-downloader/reviews/";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -58,10 +79,143 @@ function formatBytes(bytes) {
   return `${val.toFixed(i > 1 ? 1 : 0)} ${units[i]}`;
 }
 
-function showError(msg, { report = false, context = {}, retry = null } = {}) {
+function getRatingURL() {
+  const manifest = chrome.runtime.getManifest?.() || {};
+  if (manifest.browser_specific_settings?.gecko) return FIREFOX_AMO_REVIEW_URL;
+  if (!chrome.runtime.id) return "";
+  return `https://chromewebstore.google.com/detail/${chrome.runtime.id}/reviews`;
+}
+
+function showRatingPrompt(show) {
+  const ratingURL = getRatingURL();
+  ratingPrompt.style.display = show && ratingURL ? "block" : "none";
+  btnRateExtension.style.display = ratingURL ? "inline-flex" : "none";
+}
+
+async function openRatingPage() {
+  const ratingURL = getRatingURL();
+  if (!ratingURL) return;
+  await chrome.tabs.create({ url: ratingURL });
+}
+
+function setDiagnosticStatus(controls, message, className = "") {
+  controls.status.textContent = message;
+  controls.status.className = `hint diagnostic-status${className ? ` ${className}` : ""}`;
+  controls.status.style.display = message ? "block" : "none";
+}
+
+function hideDiagnosticPanel() {
+  currentDiagnosticContext = null;
+  activeDiagnosticControls = null;
+  [errorDiagnosticPanel, diagnosticPanel].forEach((panel) => {
+    panel.style.display = "none";
+  });
+  diagnosticPanel.className = "diagnostic-dropdown";
+  diagnosticContent.style.display = "none";
+  [errorDiagnosticStatus, diagnosticStatus].forEach((status) => {
+    status.textContent = "";
+    status.className = "hint diagnostic-status";
+    status.style.display = "none";
+  });
+  btnErrorSendDiagnostic.disabled = false;
+  btnSendDiagnostic.disabled = false;
+  btnErrorSendDiagnostic.textContent = DIAGNOSTIC_BUTTON_LABEL;
+  btnSendDiagnostic.textContent = DIAGNOSTIC_BUTTON_LABEL;
+}
+
+function setDiagnosticDropdown(open) {
+  diagnosticPanel.className = open ? "diagnostic-dropdown open" : "diagnostic-dropdown";
+  diagnosticContent.style.display = open ? "block" : "none";
+}
+
+function showDiagnosticPanel(context, location = "error") {
+  currentDiagnosticContext = context;
+
+  const controls = location === "complete"
+    ? {
+        panel: diagnosticPanel,
+        checkbox: includeAlbumUrl,
+        button: btnSendDiagnostic,
+        status: diagnosticStatus,
+      }
+    : {
+        panel: errorDiagnosticPanel,
+        checkbox: errorIncludeAlbumUrl,
+        button: btnErrorSendDiagnostic,
+        status: errorDiagnosticStatus,
+      };
+
+  activeDiagnosticControls = controls;
+  controls.panel.style.display = "block";
+  if (location === "complete") setDiagnosticDropdown(false);
+  controls.checkbox.checked = false;
+  controls.button.disabled = false;
+  controls.button.textContent = DIAGNOSTIC_BUTTON_LABEL;
+  setDiagnosticStatus(controls, "");
+
+  const inactivePanel = location === "complete" ? errorDiagnosticPanel : diagnosticPanel;
+  inactivePanel.style.display = "none";
+}
+
+async function sendDiagnostic() {
+  if (!currentDiagnosticContext || !activeDiagnosticControls) return;
+
+  const controls = activeDiagnosticControls;
+  controls.button.disabled = true;
+  controls.button.textContent = "Sending";
+  setDiagnosticStatus(controls, "Sending diagnostic report.");
+
+  try {
+    const response = await sendMessage({
+      type: "send-diagnostic-report",
+      userAgent: navigator.userAgent,
+      includeAlbumUrl: controls.checkbox.checked,
+      ...currentDiagnosticContext,
+    });
+
+    if (response?.sent) {
+      controls.button.textContent = "Sent";
+      setDiagnosticStatus(controls, "Diagnostic report sent.", "success");
+    } else {
+      controls.button.disabled = false;
+      controls.button.textContent = DIAGNOSTIC_BUTTON_LABEL;
+      setDiagnosticStatus(controls, "Could not send report. Try again later.", "error");
+    }
+  } catch {
+    controls.button.disabled = false;
+    controls.button.textContent = DIAGNOSTIC_BUTTON_LABEL;
+    setDiagnosticStatus(controls, "Could not send report. Try again later.", "error");
+  }
+}
+
+const COMPLETE_ICONS = {
+  success: `
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+    <polyline points="22 4 12 14.01 9 11.01"/>
+  `,
+  warning: `
+    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/>
+    <line x1="12" y1="17" x2="12.01" y2="17"/>
+  `,
+  danger: `
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="15" y1="9" x2="9" y2="15"/>
+    <line x1="9" y1="9" x2="15" y2="15"/>
+  `,
+};
+
+function setCompleteTone(tone, heading) {
+  completeIcon.className = `complete-icon ${tone}`;
+  completeIconSymbol.innerHTML = COMPLETE_ICONS[tone];
+  completeHeading.textContent = heading;
+}
+
+function showError(msg, { report = false, context = {}, retry = null, diagnostic = false } = {}) {
   errorText.textContent = msg;
   errorSection.style.display = "block";
   errorReportHint.style.display = "none";
+  hideDiagnosticPanel();
 
   if (retry) {
     btnErrorRetry.style.display = "block";
@@ -79,6 +233,13 @@ function showError(msg, { report = false, context = {}, retry = null } = {}) {
       if (result?.sent) errorReportHint.style.display = "block";
     });
   }
+
+  if (diagnostic) {
+    showDiagnosticPanel({
+      message: msg,
+      ...context,
+    });
+  }
 }
 
 function hideError() {
@@ -86,6 +247,7 @@ function hideError() {
   errorReportHint.style.display = "none";
   btnErrorRetry.style.display = "none";
   btnErrorRetry.onclick = null;
+  hideDiagnosticPanel();
 }
 
 // Wraps chrome.runtime.sendMessage with one retry for the MV3 service-worker
@@ -165,6 +327,7 @@ async function handleScan() {
       showSection(null);
       showError(response.error || "Failed to scan album.", {
         report: false,
+        diagnostic: true,
         context: {
           operation: "scan",
           albumUrl: url,
@@ -180,6 +343,7 @@ async function handleScan() {
     showSection(null);
     showError(`Scan failed: ${err.message}`, {
       report: err.name !== "ExtensionConnectionError",
+      diagnostic: true,
       context: {
         operation: "scan",
         albumUrl: url,
@@ -272,6 +436,7 @@ async function handleDownload(filter) {
     if (!response.ok) {
       showError(response.error || "Download failed to start.", {
         report: true,
+        diagnostic: true,
         context: {
           operation: "download",
           albumUrl: albumURLInput.value.trim(),
@@ -284,6 +449,7 @@ async function handleDownload(filter) {
   } catch (err) {
     showError(`Download error: ${err.message}`, {
       report: err.name !== "ExtensionConnectionError",
+      diagnostic: true,
       context: {
         operation: "download",
         albumUrl: albumURLInput.value.trim(),
@@ -301,13 +467,30 @@ function showComplete(state) {
   completeSummary.textContent = `${state.completed} of ${state.total} files downloaded successfully.`;
 
   if (state.failed > 0) {
+    if (state.completed === 0) {
+      setCompleteTone("danger", "Download Failed");
+    } else {
+      setCompleteTone("warning", "Download Finished with Issues");
+    }
     completeErrors.style.display = "block";
     completeErrorsText.textContent = `${state.failed} file(s) failed: ${state.errors.map((e) => e.filename).join(", ")}`;
     btnRetryFailed.style.display = "block";
     btnRetryFailed.textContent = `Retry failed (${state.failed})`;
+    showRatingPrompt(false);
+    showDiagnosticPanel({
+      operation: "download",
+      message: `${state.failed} of ${state.total} downloads failed`,
+      albumUrl: state.albumUrl || albumURLInput.value.trim(),
+      filter: state.filter || "",
+      failedCount: state.failed,
+      details: state,
+    }, "complete");
   } else {
+    setCompleteTone("success", "Download Complete");
     completeErrors.style.display = "none";
     btnRetryFailed.style.display = "none";
+    hideDiagnosticPanel();
+    showRatingPrompt(true);
   }
 }
 
@@ -325,6 +508,7 @@ async function handleRetryFailed() {
     if (!response?.ok) {
       showError(response?.error || "Retry failed to start.", {
         report: true,
+        diagnostic: true,
         context: { operation: "download", albumUrl: albumURLInput.value.trim() },
       });
       showSection(completeSection);
@@ -332,6 +516,7 @@ async function handleRetryFailed() {
   } catch (err) {
     showError(`Retry error: ${err.message}`, {
       report: err.name !== "ExtensionConnectionError",
+      diagnostic: true,
       context: {
         operation: "download",
         albumUrl: albumURLInput.value.trim(),
@@ -392,6 +577,12 @@ async function handleCancel() {
   } catch (err) {
     showError(`Cancel failed: ${err.message}`, {
       report: err.name !== "ExtensionConnectionError",
+      diagnostic: true,
+      context: {
+        operation: "cancel",
+        albumUrl: albumURLInput.value.trim(),
+        stack: err.stack,
+      },
       retry: err.name === "ExtensionConnectionError" ? handleCancel : null,
     });
   }
@@ -406,6 +597,7 @@ function handleReset() {
   folderInput.value = "";
   autoDetectHint.style.display = "none";
   hideError();
+  showRatingPrompt(false);
   showSection(null);
 }
 
@@ -434,6 +626,12 @@ btnDownloadPhotos.addEventListener("click", () => handleDownload("photos"));
 btnDownloadVideos.addEventListener("click", () => handleDownload("videos"));
 btnCancel.addEventListener("click", handleCancel);
 btnRetryFailed.addEventListener("click", handleRetryFailed);
+btnRateExtension.addEventListener("click", openRatingPage);
+btnErrorSendDiagnostic.addEventListener("click", sendDiagnostic);
+btnSendDiagnostic.addEventListener("click", sendDiagnostic);
+diagnosticToggle.addEventListener("click", () => {
+  setDiagnosticDropdown(diagnosticContent.style.display === "none");
+});
 btnReset.addEventListener("click", handleReset);
 
 // ── Init ─────────────────────────────────────────────────────────────────────

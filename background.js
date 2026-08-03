@@ -439,6 +439,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === "send-diagnostic-report") {
+    sendDiagnosticReport({
+      operation: msg.operation || "popup",
+      message: msg.message,
+      stack: msg.stack,
+      albumUrl: msg.albumUrl || "",
+      includeAlbumUrl: Boolean(msg.includeAlbumUrl),
+      filter: msg.filter || "",
+      failedCount: msg.failedCount,
+      details: msg.details || null,
+      userAgent: msg.userAgent,
+    })
+      .then((result) => sendResponse({ ok: true, ...result }))
+      .catch((err) => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+
   if (msg.type === "test-report") {
     reportError({
       operation: "test",
