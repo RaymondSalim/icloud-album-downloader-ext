@@ -47,6 +47,19 @@
       <button id="btn-error-retry" class="btn btn-secondary btn-block" style="display:none">
         Retry
       </button>
+      <div id="error-diagnostic-panel" class="feedback-panel diagnostic-panel" style="display:none">
+        <h3>Send diagnostic report</h3>
+        <p>The report includes browser details, extension version, and the error log.</p>
+        <label class="checkbox-row" for="error-include-album-url">
+          <input type="checkbox" id="error-include-album-url" />
+          <span>
+            Include album URL
+            <small>This makes troubleshooting much easier.</small>
+          </span>
+        </label>
+        <button id="btn-error-send-diagnostic" class="btn btn-primary btn-block">Send to developer</button>
+        <p id="error-diagnostic-status" class="hint diagnostic-status" style="display:none"></p>
+      </div>
       <p class="hint error-report-hint" id="error-report-hint" style="display:none">
         This issue was reported automatically so it can be fixed.
       </p>
@@ -134,9 +147,27 @@
       <div id="complete-errors" style="display:none">
         <p class="text-red" id="complete-errors-text"></p>
       </div>
+      <div id="rating-prompt" class="feedback-panel" style="display:none">
+        <h3>Please rate this extension</h3>
+        <p>Ratings help other people find it.</p>
+        <button id="btn-rate-extension" class="btn btn-primary btn-block">Rate extension</button>
+      </div>
       <button id="btn-retry-failed" class="btn btn-primary btn-block" style="display:none">
         Retry failed
       </button>
+      <div id="diagnostic-panel" class="feedback-panel diagnostic-panel" style="display:none">
+        <h3>Send diagnostic report</h3>
+        <p>The report includes browser details, extension version, and the error log.</p>
+        <label class="checkbox-row" for="include-album-url">
+          <input type="checkbox" id="include-album-url" />
+          <span>
+            Include album URL
+            <small>This makes troubleshooting much easier.</small>
+          </span>
+        </label>
+        <button id="btn-send-diagnostic" class="btn btn-primary btn-block">Send to developer</button>
+        <p id="diagnostic-status" class="hint diagnostic-status" style="display:none"></p>
+      </div>
       <button id="btn-reset" class="btn btn-secondary btn-block">Scan Another Album</button>
     </section>
   </div>

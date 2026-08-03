@@ -366,6 +366,60 @@ input::placeholder {
   margin-bottom: 10px;
 }
 
+.feedback-panel {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  margin-top: 10px;
+  text-align: left;
+}
+
+.feedback-panel h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.feedback-panel p {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 0;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 9px 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.checkbox-row input {
+  margin-top: 2px;
+}
+
+.checkbox-row small {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.diagnostic-status {
+  color: var(--text-secondary);
+}
+
+.diagnostic-status.success {
+  color: var(--success);
+}
+
+.diagnostic-status.error {
+  color: var(--danger);
+}
+
 .complete-section .btn-block + .btn-block {
   margin-top: 8px;
 }
