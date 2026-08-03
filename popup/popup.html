@@ -57,7 +57,7 @@
             <small>This makes troubleshooting much easier.</small>
           </span>
         </label>
-        <button id="btn-error-send-diagnostic" class="btn btn-primary btn-block">Send to developer</button>
+        <button id="btn-error-send-diagnostic" class="btn btn-secondary btn-block">Send diagnostic report</button>
         <p id="error-diagnostic-status" class="hint diagnostic-status" style="display:none"></p>
       </div>
       <p class="hint error-report-hint" id="error-report-hint" style="display:none">
@@ -152,11 +152,8 @@
         <p>Ratings help other people find it.</p>
         <button id="btn-rate-extension" class="btn btn-primary btn-block">Rate extension</button>
       </div>
-      <button id="btn-retry-failed" class="btn btn-primary btn-block" style="display:none">
-        Retry failed
-      </button>
-      <div id="diagnostic-panel" class="feedback-panel diagnostic-panel" style="display:none">
-        <h3>Send diagnostic report</h3>
+      <div id="diagnostic-panel" class="diagnostic-support" style="display:none">
+        <h3>Help troubleshoot this issue</h3>
         <p>The report includes browser details, extension version, and the error log.</p>
         <label class="checkbox-row" for="include-album-url">
           <input type="checkbox" id="include-album-url" />
@@ -165,9 +162,12 @@
             <small>This makes troubleshooting much easier.</small>
           </span>
         </label>
-        <button id="btn-send-diagnostic" class="btn btn-primary btn-block">Send to developer</button>
+        <button id="btn-send-diagnostic" class="btn btn-secondary btn-block">Send diagnostic report</button>
         <p id="diagnostic-status" class="hint diagnostic-status" style="display:none"></p>
       </div>
+      <button id="btn-retry-failed" class="btn btn-primary btn-block" style="display:none">
+        Retry failed
+      </button>
       <button id="btn-reset" class="btn btn-secondary btn-block">Scan Another Album</button>
     </section>
   </div>

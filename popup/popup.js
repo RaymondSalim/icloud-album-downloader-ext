@@ -56,6 +56,7 @@ const includeAlbumUrl  = $("#include-album-url");
 const btnSendDiagnostic = $("#btn-send-diagnostic");
 const diagnosticStatus = $("#diagnostic-status");
 const btnReset         = $("#btn-reset");
+const DIAGNOSTIC_BUTTON_LABEL = "Send diagnostic report";
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -111,8 +112,8 @@ function hideDiagnosticPanel() {
   });
   btnErrorSendDiagnostic.disabled = false;
   btnSendDiagnostic.disabled = false;
-  btnErrorSendDiagnostic.textContent = "Send to developer";
-  btnSendDiagnostic.textContent = "Send to developer";
+  btnErrorSendDiagnostic.textContent = DIAGNOSTIC_BUTTON_LABEL;
+  btnSendDiagnostic.textContent = DIAGNOSTIC_BUTTON_LABEL;
 }
 
 function showDiagnosticPanel(context, location = "error") {
@@ -136,7 +137,7 @@ function showDiagnosticPanel(context, location = "error") {
   controls.panel.style.display = "block";
   controls.checkbox.checked = false;
   controls.button.disabled = false;
-  controls.button.textContent = "Send to developer";
+  controls.button.textContent = DIAGNOSTIC_BUTTON_LABEL;
   setDiagnosticStatus(controls, "");
 
   const inactivePanel = location === "complete" ? errorDiagnosticPanel : diagnosticPanel;
@@ -164,12 +165,12 @@ async function sendDiagnostic() {
       setDiagnosticStatus(controls, "Diagnostic report sent.", "success");
     } else {
       controls.button.disabled = false;
-      controls.button.textContent = "Send to developer";
+      controls.button.textContent = DIAGNOSTIC_BUTTON_LABEL;
       setDiagnosticStatus(controls, "Could not send report. Try again later.", "error");
     }
   } catch {
     controls.button.disabled = false;
-    controls.button.textContent = "Send to developer";
+    controls.button.textContent = DIAGNOSTIC_BUTTON_LABEL;
     setDiagnosticStatus(controls, "Could not send report. Try again later.", "error");
   }
 }

@@ -4,6 +4,8 @@ const vm = require("node:vm");
 const { describe, test } = require("node:test");
 const assert = require("node:assert/strict");
 
+const popupHTML = readFileSync(join(__dirname, "../popup/popup.html"), "utf8");
+
 function createElement(id) {
   return {
     id,
@@ -171,5 +173,10 @@ describe("popup feedback rendering", () => {
     assert.equal(elements.get("#diagnostic-panel").style.display, "block");
     assert.equal(elements.get("#complete-heading").textContent, "Download Failed");
     assert.equal(elements.get("#complete-icon").className, "complete-icon danger");
+  });
+
+  test("uses integrated secondary diagnostic controls in completion failures", () => {
+    assert.match(popupHTML, /id="diagnostic-panel" class="diagnostic-support"/);
+    assert.match(popupHTML, /id="btn-send-diagnostic" class="btn btn-secondary btn-block"/);
   });
 });
