@@ -152,22 +152,27 @@
         <p>Ratings help other people find it.</p>
         <button id="btn-rate-extension" class="btn btn-primary btn-block">Rate extension</button>
       </div>
-      <div id="diagnostic-panel" class="diagnostic-support" style="display:none">
-        <h3>Help troubleshoot this issue</h3>
-        <p>The report includes browser details, extension version, and the error log.</p>
-        <label class="checkbox-row" for="include-album-url">
-          <input type="checkbox" id="include-album-url" />
-          <span>
-            Include album URL
-            <small>This makes troubleshooting much easier.</small>
-          </span>
-        </label>
-        <button id="btn-send-diagnostic" class="btn btn-secondary btn-block">Send diagnostic report</button>
-        <p id="diagnostic-status" class="hint diagnostic-status" style="display:none"></p>
-      </div>
       <button id="btn-retry-failed" class="btn btn-primary btn-block" style="display:none">
         Retry failed
       </button>
+      <div id="diagnostic-panel" class="diagnostic-dropdown" style="display:none">
+        <button id="diagnostic-toggle" class="diagnostic-toggle" type="button">
+          <span>Report this issue</span>
+          <span class="diagnostic-chevron">›</span>
+        </button>
+        <div id="diagnostic-content" class="diagnostic-content" style="display:none">
+          <p>The report includes browser details, extension version, and the error log.</p>
+          <label class="checkbox-row" for="include-album-url">
+            <input type="checkbox" id="include-album-url" />
+            <span>
+              Include album URL
+              <small>This makes troubleshooting much easier.</small>
+            </span>
+          </label>
+          <button id="btn-send-diagnostic" class="btn btn-secondary btn-block">Send diagnostic report</button>
+          <p id="diagnostic-status" class="hint diagnostic-status" style="display:none"></p>
+        </div>
+      </div>
       <button id="btn-reset" class="btn btn-secondary btn-block">Scan Another Album</button>
     </section>
   </div>

@@ -52,6 +52,8 @@ const ratingPrompt     = $("#rating-prompt");
 const btnRateExtension = $("#btn-rate-extension");
 const btnRetryFailed     = $("#btn-retry-failed");
 const diagnosticPanel  = $("#diagnostic-panel");
+const diagnosticToggle = $("#diagnostic-toggle");
+const diagnosticContent = $("#diagnostic-content");
 const includeAlbumUrl  = $("#include-album-url");
 const btnSendDiagnostic = $("#btn-send-diagnostic");
 const diagnosticStatus = $("#diagnostic-status");
@@ -105,6 +107,8 @@ function hideDiagnosticPanel() {
   [errorDiagnosticPanel, diagnosticPanel].forEach((panel) => {
     panel.style.display = "none";
   });
+  diagnosticPanel.className = "diagnostic-dropdown";
+  diagnosticContent.style.display = "none";
   [errorDiagnosticStatus, diagnosticStatus].forEach((status) => {
     status.textContent = "";
     status.className = "hint diagnostic-status";
@@ -114,6 +118,11 @@ function hideDiagnosticPanel() {
   btnSendDiagnostic.disabled = false;
   btnErrorSendDiagnostic.textContent = DIAGNOSTIC_BUTTON_LABEL;
   btnSendDiagnostic.textContent = DIAGNOSTIC_BUTTON_LABEL;
+}
+
+function setDiagnosticDropdown(open) {
+  diagnosticPanel.className = open ? "diagnostic-dropdown open" : "diagnostic-dropdown";
+  diagnosticContent.style.display = open ? "block" : "none";
 }
 
 function showDiagnosticPanel(context, location = "error") {
@@ -135,6 +144,7 @@ function showDiagnosticPanel(context, location = "error") {
 
   activeDiagnosticControls = controls;
   controls.panel.style.display = "block";
+  if (location === "complete") setDiagnosticDropdown(false);
   controls.checkbox.checked = false;
   controls.button.disabled = false;
   controls.button.textContent = DIAGNOSTIC_BUTTON_LABEL;
@@ -616,6 +626,9 @@ btnRetryFailed.addEventListener("click", handleRetryFailed);
 btnRateExtension.addEventListener("click", openRatingPage);
 btnErrorSendDiagnostic.addEventListener("click", sendDiagnostic);
 btnSendDiagnostic.addEventListener("click", sendDiagnostic);
+diagnosticToggle.addEventListener("click", () => {
+  setDiagnosticDropdown(diagnosticContent.style.display === "none");
+});
 btnReset.addEventListener("click", handleReset);
 
 // ── Init ─────────────────────────────────────────────────────────────────────

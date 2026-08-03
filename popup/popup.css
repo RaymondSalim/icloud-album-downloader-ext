@@ -399,35 +399,6 @@ input::placeholder {
   margin-bottom: 0;
 }
 
-.diagnostic-support {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-  text-align: left;
-}
-
-.diagnostic-support h3 {
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 3px;
-}
-
-.diagnostic-support p {
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.4;
-  margin-bottom: 0;
-}
-
-.diagnostic-support .checkbox-row {
-  color: var(--text-secondary);
-  margin: 8px 0 10px;
-}
-
-.diagnostic-support + .btn-block {
-  margin-top: 10px;
-}
-
 .checkbox-row {
   display: flex;
   align-items: flex-start;
@@ -458,6 +429,55 @@ input::placeholder {
 
 .diagnostic-status.error {
   color: var(--danger);
+}
+
+.diagnostic-dropdown {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  text-align: left;
+}
+
+.diagnostic-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 0;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.diagnostic-chevron {
+  color: var(--text-secondary);
+  font-size: 17px;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.diagnostic-dropdown.open .diagnostic-chevron {
+  transform: rotate(90deg);
+}
+
+.diagnostic-content {
+  padding-bottom: 10px;
+}
+
+.diagnostic-content p {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 0;
+}
+
+.diagnostic-content .checkbox-row {
+  color: var(--text-secondary);
+  margin: 8px 0 10px;
 }
 
 .complete-section .btn-block + .btn-block {

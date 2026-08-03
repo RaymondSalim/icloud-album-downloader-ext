@@ -64,6 +64,8 @@ function loadPopup() {
     "rating-prompt",
     "btn-rate-extension",
     "diagnostic-panel",
+    "diagnostic-toggle",
+    "diagnostic-content",
     "include-album-url",
     "btn-send-diagnostic",
     "diagnostic-status",
@@ -149,6 +151,7 @@ describe("popup feedback rendering", () => {
 
     assert.equal(elements.get("#rating-prompt").style.display, "none");
     assert.equal(elements.get("#diagnostic-panel").style.display, "block");
+    assert.equal(elements.get("#diagnostic-content").style.display, "none");
     assert.equal(elements.get("#include-album-url").checked, false);
     assert.equal(elements.get("#complete-heading").textContent, "Download Finished with Issues");
     assert.equal(elements.get("#complete-icon").className, "complete-icon warning");
@@ -171,12 +174,15 @@ describe("popup feedback rendering", () => {
 
     assert.equal(elements.get("#rating-prompt").style.display, "none");
     assert.equal(elements.get("#diagnostic-panel").style.display, "block");
+    assert.equal(elements.get("#diagnostic-content").style.display, "none");
     assert.equal(elements.get("#complete-heading").textContent, "Download Failed");
     assert.equal(elements.get("#complete-icon").className, "complete-icon danger");
   });
 
-  test("uses integrated secondary diagnostic controls in completion failures", () => {
-    assert.match(popupHTML, /id="diagnostic-panel" class="diagnostic-support"/);
+  test("uses collapsed secondary diagnostic controls in completion failures", () => {
+    assert.match(popupHTML, /id="diagnostic-panel" class="diagnostic-dropdown"/);
+    assert.match(popupHTML, /id="diagnostic-toggle"[^>]*>[\s\S]*Report this issue/);
+    assert.match(popupHTML, /id="diagnostic-content" class="diagnostic-content" style="display:none"/);
     assert.match(popupHTML, /id="btn-send-diagnostic" class="btn btn-secondary btn-block"/);
   });
 });
