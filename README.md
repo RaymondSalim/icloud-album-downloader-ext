@@ -68,7 +68,7 @@ icons/
 
 ## Error reporting (developer)
 
-When users hit real failures (scan errors, download failures), the extension posts a report to a Cloudflare Worker you deploy. The worker forwards it to Slack. Your Slack webhook URL never ships in the extension.
+When users hit real failures (scan errors, download failures), the extension posts a report to a Cloudflare Worker you deploy. The worker forwards automatic errors, user-submitted diagnostics, and daily summaries to Slack. Your Slack webhook URLs never ship in the extension.
 
 **1. Deploy the worker**
 
@@ -78,10 +78,13 @@ See [`cloudflare/error-reporter/README.md`](cloudflare/error-reporter/README.md)
 cd cloudflare/error-reporter
 wrangler login
 wrangler secret put SLACK_ERROR_WEBHOOK_URL    # Slack incoming webhook (errors channel)
+wrangler secret put SLACK_DIAGNOSTIC_WEBHOOK_URL # Slack incoming webhook (user diagnostic reports)
 wrangler secret put SLACK_SUMMARY_WEBHOOK_URL  # Slack incoming webhook (daily summary channel)
 wrangler secret put REPORT_SECRET        # shared secret for the extension
 wrangler deploy
 ```
+
+If `SLACK_DIAGNOSTIC_WEBHOOK_URL` is not set, user-submitted diagnostic reports fall back to `SLACK_ERROR_WEBHOOK_URL`, then the legacy `SLACK_WEBHOOK_URL`.
 
 **2. Configure the extension**
 
