@@ -350,8 +350,19 @@ input::placeholder {
 }
 
 .complete-icon {
-  color: var(--success);
   margin-bottom: 8px;
+}
+
+.complete-icon.success {
+  color: var(--success);
+}
+
+.complete-icon.warning {
+  color: var(--video-accent);
+}
+
+.complete-icon.danger {
+  color: var(--danger);
 }
 
 .complete-section h2 {

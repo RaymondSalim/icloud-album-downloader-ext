@@ -52,6 +52,9 @@ function loadPopup() {
     "failed-count",
     "btn-cancel",
     "complete-section",
+    "complete-icon",
+    "complete-icon-symbol",
+    "complete-heading",
     "complete-summary",
     "complete-errors",
     "complete-errors-text",
@@ -123,9 +126,11 @@ describe("popup feedback rendering", () => {
 
     assert.equal(elements.get("#rating-prompt").style.display, "block");
     assert.equal(elements.get("#diagnostic-panel").style.display, "none");
+    assert.equal(elements.get("#complete-heading").textContent, "Download Complete");
+    assert.equal(elements.get("#complete-icon").className, "complete-icon success");
   });
 
-  test("shows diagnostic panel and leaves album URL unchecked after partial failure", () => {
+  test("shows caution state, diagnostic panel, and leaves album URL unchecked after partial failure", () => {
     const { context, elements } = loadPopup();
     elements.get("#album-url").value = "https://www.icloud.com/sharedalbum/#SECRET";
 
@@ -143,5 +148,28 @@ describe("popup feedback rendering", () => {
     assert.equal(elements.get("#rating-prompt").style.display, "none");
     assert.equal(elements.get("#diagnostic-panel").style.display, "block");
     assert.equal(elements.get("#include-album-url").checked, false);
+    assert.equal(elements.get("#complete-heading").textContent, "Download Finished with Issues");
+    assert.equal(elements.get("#complete-icon").className, "complete-icon warning");
+  });
+
+  test("shows failure state when every download failed", () => {
+    const { context, elements } = loadPopup();
+    elements.get("#album-url").value = "https://www.icloud.com/sharedalbum/#SECRET";
+
+    context.showComplete({
+      active: false,
+      total: 4,
+      completed: 0,
+      failed: 4,
+      errors: [{ filename: "IMG_1001.JPG", error: "Download interrupted" }],
+      failedItems: [],
+      albumUrl: "https://www.icloud.com/sharedalbum/#SECRET",
+      filter: "all",
+    });
+
+    assert.equal(elements.get("#rating-prompt").style.display, "none");
+    assert.equal(elements.get("#diagnostic-panel").style.display, "block");
+    assert.equal(elements.get("#complete-heading").textContent, "Download Failed");
+    assert.equal(elements.get("#complete-icon").className, "complete-icon danger");
   });
 });

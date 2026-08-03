@@ -42,6 +42,9 @@ const failedCount      = $("#failed-count");
 const btnCancel        = $("#btn-cancel");
 
 const completeSection  = $("#complete-section");
+const completeIcon     = $("#complete-icon");
+const completeIconSymbol = $("#complete-icon-symbol");
+const completeHeading  = $("#complete-heading");
 const completeSummary  = $("#complete-summary");
 const completeErrors   = $("#complete-errors");
 const completeErrorsText = $("#complete-errors-text");
@@ -169,6 +172,29 @@ async function sendDiagnostic() {
     controls.button.textContent = "Send to developer";
     setDiagnosticStatus(controls, "Could not send report. Try again later.", "error");
   }
+}
+
+const COMPLETE_ICONS = {
+  success: `
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+    <polyline points="22 4 12 14.01 9 11.01"/>
+  `,
+  warning: `
+    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/>
+    <line x1="12" y1="17" x2="12.01" y2="17"/>
+  `,
+  danger: `
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="15" y1="9" x2="9" y2="15"/>
+    <line x1="9" y1="9" x2="15" y2="15"/>
+  `,
+};
+
+function setCompleteTone(tone, heading) {
+  completeIcon.className = `complete-icon ${tone}`;
+  completeIconSymbol.innerHTML = COMPLETE_ICONS[tone];
+  completeHeading.textContent = heading;
 }
 
 function showError(msg, { report = false, context = {}, retry = null, diagnostic = false } = {}) {
@@ -427,6 +453,11 @@ function showComplete(state) {
   completeSummary.textContent = `${state.completed} of ${state.total} files downloaded successfully.`;
 
   if (state.failed > 0) {
+    if (state.completed === 0) {
+      setCompleteTone("danger", "Download Failed");
+    } else {
+      setCompleteTone("warning", "Download Finished with Issues");
+    }
     completeErrors.style.display = "block";
     completeErrorsText.textContent = `${state.failed} file(s) failed: ${state.errors.map((e) => e.filename).join(", ")}`;
     btnRetryFailed.style.display = "block";
@@ -441,6 +472,7 @@ function showComplete(state) {
       details: state,
     }, "complete");
   } else {
+    setCompleteTone("success", "Download Complete");
     completeErrors.style.display = "none";
     btnRetryFailed.style.display = "none";
     hideDiagnosticPanel();
