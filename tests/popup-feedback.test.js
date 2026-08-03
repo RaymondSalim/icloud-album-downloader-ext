@@ -21,7 +21,7 @@ function createElement(id) {
   };
 }
 
-function loadPopup({ manifest = { version: "1.6.0" } } = {}) {
+function loadPopup({ manifest = { version: "1.7.0" } } = {}) {
   const elements = new Map();
   const ids = [
     "album-url",
@@ -137,7 +137,7 @@ describe("popup feedback rendering", () => {
   test("shows rating prompt with AMO reviews URL on Firefox", async () => {
     const { context, elements } = loadPopup({
       manifest: {
-        version: "1.6.0",
+        version: "1.7.0",
         browser_specific_settings: { gecko: { id: "icloud-album-downloader-pub@extension" } },
       },
     });

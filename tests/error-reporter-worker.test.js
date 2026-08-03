@@ -41,7 +41,7 @@ describe("error reporter worker diagnostics", () => {
         message: "3 files failed",
         albumUrl: "",
         userIncludedAlbumUrl: false,
-        version: "1.6.0",
+        version: "1.7.0",
         userAgent: "test browser",
         details: { failed: 3 },
       }),

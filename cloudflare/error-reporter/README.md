@@ -67,7 +67,7 @@ Body (error — posts to Slack immediately and increments daily error counter):
   "message": "HTTP 403 from ...",
   "stack": "...",
   "albumUrl": "https://www.icloud.com/sharedalbum/#B0aGWZGq...",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "userAgent": "...",
   "filter": "",
   "failedCount": null,
@@ -81,7 +81,7 @@ Body (success ping — no Slack; worker increments daily counter only):
 {
   "kind": "count",
   "metric": "scan_ok",
-  "version": "1.6.0"
+  "version": "1.7.0"
 }
 ```
 
@@ -96,7 +96,7 @@ Body (user-submitted diagnostic report — posts to the diagnostic Slack webhook
   "message": "3 of 42 downloads failed",
   "albumUrl": "",
   "userIncludedAlbumUrl": false,
-  "version": "1.6.0",
+  "version": "1.7.0",
   "userAgent": "...",
   "filter": "all",
   "failedCount": 3,

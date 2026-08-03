@@ -48,7 +48,7 @@ describe("buildDiagnosticReportPayload", () => {
       albumUrl: "https://www.icloud.com/sharedalbum/#SECRET",
       includeAlbumUrl: false,
       userAgent: "test browser",
-      version: "1.6.0",
+      version: "1.7.0",
     });
 
     assert.equal(payload.kind, "diagnostic");
@@ -63,7 +63,7 @@ describe("buildDiagnosticReportPayload", () => {
       albumUrl: "https://www.icloud.com/sharedalbum/#SECRET",
       includeAlbumUrl: true,
       userAgent: "test browser",
-      version: "1.6.0",
+      version: "1.7.0",
     });
 
     assert.equal(payload.albumUrl, "https://www.icloud.com/sharedalbum/#SECRET");
