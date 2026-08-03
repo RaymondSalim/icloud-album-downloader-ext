@@ -109,6 +109,10 @@ function summarySlackWebhook(env) {
   return env.SLACK_SUMMARY_WEBHOOK_URL || env.SLACK_WEBHOOK_URL;
 }
 
+function diagnosticSlackWebhook(env) {
+  return env.SLACK_DIAGNOSTIC_WEBHOOK_URL || errorSlackWebhook(env);
+}
+
 async function postToSlack(webhookUrl, payload) {
   const slackRes = await fetch(webhookUrl, {
     method: "POST",
@@ -224,6 +228,53 @@ async function handleError(body, env) {
   return jsonResponse({ ok: true });
 }
 
+function buildDiagnosticSlackPayload(report) {
+  const lines = [
+    `*Operation:* ${report.operation}`,
+    `*Version:* ${report.version || "unknown"}`,
+    `*Browser:* ${truncate(report.userAgent, 200)}`,
+    `*Album URL included:* ${report.userIncludedAlbumUrl ? "yes" : "no"}`,
+  ];
+
+  if (report.albumUrl) lines.push(`*Album URL:* ${report.albumUrl}`);
+  if (report.filter) lines.push(`*Download filter:* ${report.filter}`);
+  if (report.failedCount != null) lines.push(`*Failed files:* ${report.failedCount}`);
+
+  lines.push("", `*Message:*\n${truncate(report.message, 1500)}`);
+
+  if (report.stack) {
+    lines.push("", `*Stack:*\n\`\`\`${truncate(report.stack, 1200)}\`\`\``);
+  }
+
+  if (report.details) {
+    lines.push("", `*Details:*\n\`\`\`${truncate(JSON.stringify(report.details, null, 2), 1600)}\`\`\``);
+  }
+
+  return {
+    text: `iCloud Album Downloader diagnostic: ${report.operation}`,
+    blocks: [
+      {
+        type: "header",
+        text: { type: "plain_text", text: "iCloud Album Downloader - Diagnostic Report", emoji: true },
+      },
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: lines.join("\n") },
+      },
+    ],
+  };
+}
+
+async function handleDiagnostic(body, env) {
+  const webhookUrl = diagnosticSlackWebhook(env);
+  if (!webhookUrl) {
+    return jsonResponse({ ok: false, error: "server_misconfigured" }, 500);
+  }
+
+  await postToSlack(webhookUrl, buildDiagnosticSlackPayload(body));
+  return jsonResponse({ ok: true });
+}
+
 async function handleReport(request, env) {
   const authError = await authorize(request, env);
   if (authError) return authError;
@@ -239,6 +290,11 @@ async function handleReport(request, env) {
     return handleCount(body, env);
   }
 
+  const kind = body.kind || "error";
+  if (kind !== "error" && kind !== "diagnostic") {
+    return jsonResponse({ ok: false, error: "invalid_kind" }, 400);
+  }
+
   if (!body.operation || !body.message) {
     return jsonResponse({ ok: false, error: "missing_fields" }, 400);
   }
@@ -248,6 +304,9 @@ async function handleReport(request, env) {
   }
 
   try {
+    if (kind === "diagnostic") {
+      return await handleDiagnostic(body, env);
+    }
     return await handleError(body, env);
   } catch (err) {
     return jsonResponse({ ok: false, error: err.message }, 502);
