@@ -66,6 +66,9 @@ let scannedData = null;
 let currentDiagnosticContext = null;
 let activeDiagnosticControls = null;
 
+const FIREFOX_AMO_REVIEW_URL =
+  "https://addons.mozilla.org/en-US/firefox/addon/icloud-album-downloader/reviews/";
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatBytes(bytes) {
@@ -78,7 +81,7 @@ function formatBytes(bytes) {
 
 function getRatingURL() {
   const manifest = chrome.runtime.getManifest?.() || {};
-  if (manifest.browser_specific_settings?.gecko) return "";
+  if (manifest.browser_specific_settings?.gecko) return FIREFOX_AMO_REVIEW_URL;
   if (!chrome.runtime.id) return "";
   return `https://chromewebstore.google.com/detail/${chrome.runtime.id}/reviews`;
 }

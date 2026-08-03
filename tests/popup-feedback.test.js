@@ -21,7 +21,7 @@ function createElement(id) {
   };
 }
 
-function loadPopup() {
+function loadPopup({ manifest = { version: "1.6.0" } } = {}) {
   const elements = new Map();
   const ids = [
     "album-url",
@@ -86,7 +86,7 @@ function loadPopup() {
     chrome: {
       runtime: {
         id: "abcdefghijklmnopqrstuvwxyabcdefghijkl",
-        getManifest: () => ({ version: "1.6.0" }),
+        getManifest: () => manifest,
         onMessage: { addListener() {} },
         sendMessage: async () => ({ ok: true, state: { active: false, total: 0 } }),
       },
@@ -132,6 +132,35 @@ describe("popup feedback rendering", () => {
     assert.equal(elements.get("#diagnostic-panel").style.display, "none");
     assert.equal(elements.get("#complete-heading").textContent, "Download Complete");
     assert.equal(elements.get("#complete-icon").className, "complete-icon success");
+  });
+
+  test("shows rating prompt with AMO reviews URL on Firefox", async () => {
+    const { context, elements } = loadPopup({
+      manifest: {
+        version: "1.6.0",
+        browser_specific_settings: { gecko: { id: "icloud-album-downloader-pub@extension" } },
+      },
+    });
+    let openedURL = "";
+    context.chrome.tabs.create = async ({ url }) => {
+      openedURL = url;
+    };
+
+    context.showComplete({
+      active: false,
+      total: 4,
+      completed: 4,
+      failed: 0,
+      errors: [],
+      failedItems: [],
+    });
+    await context.openRatingPage();
+
+    assert.equal(elements.get("#rating-prompt").style.display, "block");
+    assert.equal(
+      openedURL,
+      "https://addons.mozilla.org/en-US/firefox/addon/icloud-album-downloader/reviews/"
+    );
   });
 
   test("shows caution state, diagnostic panel, and leaves album URL unchecked after partial failure", () => {
